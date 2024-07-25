@@ -574,6 +574,7 @@ pub fn run(
     cfg_ctx: &ConfigDataContext,
     api_ctx: &ApiDataContext,
 ) -> (Deliveries, Builds, MarketOrders) {
+    let stock_targets = stock_targets(cfg_ctx);
     let mut deliveries = Deliveries::new();
     let mut builds = Builds::new();
     let mut slots = cfg_ctx.slot_count.clone();
@@ -583,7 +584,7 @@ pub fn run(
             if !try_build_intermediates(
                 cfg_ctx,
                 api_ctx,
-                &stock_targets(cfg_ctx),
+                &stock_targets,
                 &mut deliveries,
                 &mut builds,
                 &mut slots,
@@ -599,7 +600,7 @@ pub fn run(
                 api_ctx,
                 id,
                 production_line,
-                &stock_targets(cfg_ctx),
+                &stock_targets,
                 &deliveries,
                 &builds,
                 &slots,

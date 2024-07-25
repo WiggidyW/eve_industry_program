@@ -16,6 +16,46 @@ pub struct ConfigDataContext {
     pub slot_count: SlotCount,
 }
 
+pub struct Skills(HashMap<TypeId, u8>);
+
+impl Skills {
+    pub fn me(&self, item: Item, job_kind: JobKind) -> f64 {
+        let mut skill_me = 1.0;
+        for (skill_type_id, skill_level) in self.0.iter() {
+            skill_me *= Skill {
+                kind: *skill_type_id,
+                level: *skill_level,
+            }
+            .me(item, job_kind);
+        }
+        skill_me
+    }
+
+    pub fn te(&self, item: Item, job_kind: JobKind) -> f64 {
+        let mut skill_te = 1.0;
+        for (skill_type_id, skill_level) in self.0.iter() {
+            skill_te *= Skill {
+                kind: *skill_type_id,
+                level: *skill_level,
+            }
+            .te(item, job_kind);
+        }
+        skill_te
+    }
+
+    pub fn ce(&self, item: Item, job_kind: JobKind) -> f64 {
+        let mut skill_ce = 1.0;
+        for (skill_type_id, skill_level) in self.0.iter() {
+            skill_ce *= Skill {
+                kind: *skill_type_id,
+                level: *skill_level,
+            }
+            .ce(item, job_kind);
+        }
+        skill_ce
+    }
+}
+
 pub enum Rigs {
     Zero,
     One(TypeId),
@@ -24,6 +64,11 @@ pub enum Rigs {
 }
 
 pub struct CollateralOverride(HashMap<TypeId, f64>);
+
+pub enum Structure {
+    Structure(TypeId),
+    Station,
+}
 
 pub struct Location {
     pub id: LocationId,
@@ -41,6 +86,7 @@ impl Location {
 
 pub struct LocationProduction {
     pub rigs: Rigs,
+    pub structure: Structure,
     pub production_lines: Vec<ProductionLineId>,
 }
 

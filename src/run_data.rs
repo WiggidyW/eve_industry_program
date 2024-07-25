@@ -85,9 +85,3 @@ impl Builds {
             .or_insert(1);
     }
 }
-
-pub struct ProfitCheckData {
-    pub materials: HashMap<Item, u64>,
-}
-
-// pub struct

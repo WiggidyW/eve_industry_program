@@ -37,6 +37,18 @@ impl Blueprint {
             BlueprintKind::BPC
         }
     }
+
+    pub fn me(&self, item: Item, job_kind: JobKind) -> f64 {
+        self.me.blueprint_me(item, job_kind)
+    }
+
+    pub fn te(&self, item: Item, job_kind: JobKind) -> f64 {
+        self.te.blueprint_te(item, job_kind)
+    }
+
+    pub fn ce(&self, item: Item, job_kind: JobKind) -> f64 {
+        1.0
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -110,6 +122,25 @@ pub enum MaterialEfficiency {
     ME10,
 }
 
+impl MaterialEfficiency {
+    pub fn blueprint_me(&self, item: Item, job_kind: JobKind) -> f64 {
+        match (job_kind, self) {
+            (JobKind::Manufacturing, MaterialEfficiency::ME00) => 1.0,
+            (JobKind::Manufacturing, MaterialEfficiency::ME01) => 0.99,
+            (JobKind::Manufacturing, MaterialEfficiency::ME02) => 0.98,
+            (JobKind::Manufacturing, MaterialEfficiency::ME03) => 0.97,
+            (JobKind::Manufacturing, MaterialEfficiency::ME04) => 0.96,
+            (JobKind::Manufacturing, MaterialEfficiency::ME05) => 0.95,
+            (JobKind::Manufacturing, MaterialEfficiency::ME06) => 0.94,
+            (JobKind::Manufacturing, MaterialEfficiency::ME07) => 0.93,
+            (JobKind::Manufacturing, MaterialEfficiency::ME08) => 0.92,
+            (JobKind::Manufacturing, MaterialEfficiency::ME09) => 0.91,
+            (JobKind::Manufacturing, MaterialEfficiency::ME10) => 0.90,
+            _ => 1.0,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum TimeEfficiency {
     TE00,
@@ -123,4 +154,23 @@ pub enum TimeEfficiency {
     TE08,
     TE09,
     TE10,
+}
+
+impl TimeEfficiency {
+    pub fn blueprint_te(&self, item: Item, job_kind: JobKind) -> f64 {
+        match (job_kind, self) {
+            (JobKind::Manufacturing, TimeEfficiency::TE00) => 1.0,
+            (JobKind::Manufacturing, TimeEfficiency::TE01) => 0.98,
+            (JobKind::Manufacturing, TimeEfficiency::TE02) => 0.96,
+            (JobKind::Manufacturing, TimeEfficiency::TE03) => 0.94,
+            (JobKind::Manufacturing, TimeEfficiency::TE04) => 0.92,
+            (JobKind::Manufacturing, TimeEfficiency::TE05) => 0.90,
+            (JobKind::Manufacturing, TimeEfficiency::TE06) => 0.88,
+            (JobKind::Manufacturing, TimeEfficiency::TE07) => 0.86,
+            (JobKind::Manufacturing, TimeEfficiency::TE08) => 0.84,
+            (JobKind::Manufacturing, TimeEfficiency::TE09) => 0.82,
+            (JobKind::Manufacturing, TimeEfficiency::TE10) => 0.80,
+            _ => 1.0,
+        }
+    }
 }
