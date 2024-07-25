@@ -1,6 +1,6 @@
 use crate::{common::*, static_data::*};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{hash_map, HashMap, HashSet},
     ops::Index,
     time::Duration,
 };
@@ -13,6 +13,7 @@ pub struct ConfigDataContext {
     pub collateral_override: CollateralOverride,
     pub max_time: Duration, // time that all production lines are running for
     pub daily_flex_time: Duration, // extra time required for daily startables under 24 hours
+    pub slot_count: SlotCount,
 }
 
 pub enum Rigs {
@@ -46,6 +47,7 @@ pub struct LocationProduction {
 pub struct LocationMarket {
     pub sales_tax: f64,
     pub broker_fee: f64,
+    pub export_dst_production_lines: Vec<DeliveryPipeId>,
 }
 
 pub struct Locations(HashMap<LocationId, Location>);
@@ -103,17 +105,44 @@ impl DeliveryPipe {
 
     pub fn src_location<'cfg>(
         &self,
-        ctx: &'cfg ConfigDataContext,
+        cfg_ctx: &'cfg ConfigDataContext,
     ) -> &'cfg Location {
-        &ctx.locations[ctx.delivery_routes[self.0[0]].src_location]
+        &cfg_ctx.locations[cfg_ctx.delivery_routes[self.0[0]].src_location]
+    }
+
+    pub fn src_location_ids<'cfg>(
+        &'cfg self,
+        cfg_ctx: &'cfg ConfigDataContext,
+    ) -> impl Iterator<Item = LocationId> + 'cfg {
+        self.0.iter().map(move |&route_id| {
+            cfg_ctx.delivery_routes[route_id].src_location
+        })
     }
 
     pub fn dst_location<'cfg>(
         &self,
-        ctx: &'cfg ConfigDataContext,
+        cfg_ctx: &'cfg ConfigDataContext,
     ) -> &'cfg Location {
-        &ctx.locations
-            [ctx.delivery_routes[self.0[self.0.len() - 1]].dst_location]
+        &cfg_ctx.locations[self.dst_location_id(cfg_ctx)]
+    }
+
+    pub fn dst_location_id(&self, cfg_ctx: &ConfigDataContext) -> LocationId {
+        cfg_ctx.delivery_routes[self.0[self.0.len() - 1]].dst_location
+    }
+
+    pub fn location_ids<'cfg>(
+        &'cfg self,
+        cfg_ctx: &'cfg ConfigDataContext,
+    ) -> impl Iterator<Item = LocationId> + 'cfg {
+        self.0
+            .iter()
+            .map(|&route_id| {
+                let route = &cfg_ctx.delivery_routes[route_id];
+                route.src_location
+            })
+            .chain(std::iter::once(
+                cfg_ctx.delivery_routes[self.0[self.0.len() - 1]].dst_location,
+            ))
     }
 }
 
@@ -160,17 +189,19 @@ pub struct ProductionLine {
     pub import_src_production_lines: HashMap<TypeId, ProductionLineId>,
     pub location: LocationId,
     pub decryptor: Option<TypeId>,
+    pub parallel: u32,
 }
 
 impl ProductionLine {
-    pub fn location<'cfg>(
-        &self,
-        cfg_ctx: &'cfg ConfigDataContext,
-    ) -> &'cfg Location {
-        &cfg_ctx.locations[self.location]
+    pub fn num_produced(&self, ctx: &ConfigDataContext) -> u64 {
+        unimplemented!()
     }
 
     pub fn cost_efficiency(&self) -> f64 {
+        unimplemented!()
+    }
+
+    pub fn material_efficiency(&self) -> f64 {
         unimplemented!()
     }
 
@@ -180,6 +211,62 @@ impl ProductionLine {
 
     pub fn time_per_run(&self) -> Duration {
         unimplemented!()
+    }
+
+    pub fn intermediate(&self) -> bool {
+        match self.export_kind {
+            ProductionLineExportKind::IntermediateMaterial => true,
+            _ => false,
+        }
+    }
+
+    pub fn product(&self) -> bool {
+        match self.export_kind {
+            ProductionLineExportKind::Product => true,
+            _ => false,
+        }
+    }
+
+    pub fn location<'cfg>(
+        &self,
+        cfg_ctx: &'cfg ConfigDataContext,
+    ) -> &'cfg Location {
+        &cfg_ctx.locations[self.location]
+    }
+
+    pub fn export_dst_pipe<'cfg>(
+        &self,
+        cfg_ctx: &'cfg ConfigDataContext,
+    ) -> &'cfg DeliveryPipe {
+        &cfg_ctx.delivery_pipes[self.export_dst_pipe]
+    }
+
+    pub fn import_src_market_pipes<'cfg>(
+        &'cfg self,
+        cfg_ctx: &'cfg ConfigDataContext,
+    ) -> impl Iterator<Item = &'cfg DeliveryPipe> {
+        self.import_src_market_pipes
+            .iter()
+            .map(move |&pipe_id| &cfg_ctx.delivery_pipes[pipe_id])
+    }
+
+    pub fn import_src_production_line_pipe_id(
+        &self,
+        cfg_ctx: &ConfigDataContext,
+        type_id: TypeId,
+    ) -> DeliveryPipeId {
+        cfg_ctx.production_lines[self.import_src_production_lines[&type_id]]
+            .export_dst_pipe
+    }
+
+    // panic if type id not found
+    pub fn import_src_production_line_pipe<'cfg>(
+        &'cfg self,
+        cfg_ctx: &'cfg ConfigDataContext,
+        type_id: TypeId,
+    ) -> &'cfg DeliveryPipe {
+        cfg_ctx.production_lines[self.import_src_production_lines[&type_id]]
+            .export_dst_pipe(cfg_ctx)
     }
 
     // (runs per sequence, number of sequences)
@@ -212,10 +299,6 @@ impl ProductionLine {
         }
     }
 
-    pub fn num_produced(&self, ctx: &ConfigDataContext) -> u64 {
-        unimplemented!()
-    }
-
     pub fn num_runs(&self, ctx: &ConfigDataContext) -> u32 {
         let (runs_per_sequence, num_sequences) = self.num_sequence_runs(ctx);
         runs_per_sequence * num_sequences
@@ -243,9 +326,29 @@ impl ProductionLine {
             (location, rate)
         })
     }
+
+    pub fn src_markets_with_delivery_pipes<'cfg>(
+        &'cfg self,
+        cfg_ctx: &'cfg ConfigDataContext,
+    ) -> impl Iterator<Item = (&'cfg Location, DeliveryPipeId, &'cfg DeliveryPipe)>
+    {
+        self.import_src_market_pipes.iter().map(move |&pipe_id| {
+            let pipe = &cfg_ctx.delivery_pipes[pipe_id];
+            let location = pipe.src_location(cfg_ctx);
+            (location, pipe_id, pipe)
+        })
+    }
 }
 
 pub struct ProductionLines(HashMap<ProductionLineId, ProductionLine>);
+
+impl<'pl> IntoIterator for &'pl ProductionLines {
+    type IntoIter = hash_map::Iter<'pl, ProductionLineId, ProductionLine>;
+    type Item = (&'pl ProductionLineId, &'pl ProductionLine);
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
 
 impl Index<ProductionLineId> for ProductionLines {
     type Output = ProductionLine;

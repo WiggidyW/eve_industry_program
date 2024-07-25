@@ -94,6 +94,16 @@ impl MarketOrders {
         })
     }
 
+    pub fn volume(&self, location_id: LocationId, type_id: TypeId) -> u64 {
+        self.0
+            .get(&location_id)
+            .and_then(|location_market_orders| {
+                location_market_orders.0.get(&type_id)
+            })
+            .map(|type_market_orders| type_market_orders.total)
+            .unwrap_or(0)
+    }
+
     pub fn reserve(
         &mut self,
         location_id: LocationId,
@@ -105,17 +115,7 @@ impl MarketOrders {
             .unwrap()
             .reserve(type_id, volume);
     }
-    // pub fn get_mut(
-    //     &mut self,
-    //     location_id: LocationId,
-    // ) -> &mut LocationMarketOrders {
-    //     self.0
-    //         .entry(location_id)
-    //         .or_insert(LocationMarketOrders(HashMap::new()))
-    // }
 }
-
-// gonna need another struct for temporary reserves ^ when calcing profit inclusive of intermediate prod lines
 
 pub struct SystemCostIndices {
     pub manufacturing: f64,
@@ -150,9 +150,38 @@ impl Index<SystemId> for CostIndices {
     }
 }
 
-pub struct LocationAssets(HashMap<LocationId, (Item, u64)>);
+pub struct LocationAssets(HashMap<Item, u64>);
 
 pub struct Assets(HashMap<LocationId, LocationAssets>);
+
+impl Assets {
+    pub fn new() -> Self {
+        Assets(HashMap::new())
+    }
+
+    pub fn add_amount(
+        &mut self,
+        location_id: LocationId,
+        item: Item,
+        amount: u64,
+    ) {
+        self.0
+            .entry(location_id)
+            .or_insert_with(|| LocationAssets(HashMap::new()))
+            .0
+            .entry(item)
+            .and_modify(|current_amount| *current_amount += amount)
+            .or_insert(amount);
+    }
+
+    pub fn get_amount(&self, location_id: LocationId, item: Item) -> u64 {
+        self.0
+            .get(&location_id)
+            .and_then(|location_assets| location_assets.0.get(&item))
+            .copied()
+            .unwrap_or(0)
+    }
+}
 
 pub struct AdjustedPrices(HashMap<TypeId, f64>);
 

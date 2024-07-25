@@ -51,10 +51,28 @@ pub enum SlotKind {
     Science,
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct SlotCount {
     pub manufacture: u32,
     pub reaction: u32,
     pub science: u32,
+}
+
+impl SlotCount {
+    pub fn can_fit(&self, other: &SlotCount) -> bool {
+        self.manufacture >= other.manufacture
+            && self.reaction >= other.reaction
+            && self.science >= other.science
+    }
+
+    pub fn reserve(&mut self, job: JobKind) {
+        match job {
+            JobKind::Manufacturing => self.manufacture -= 1,
+            JobKind::Copying => self.science -= 1,
+            JobKind::Invention => self.science -= 1,
+            JobKind::Reaction => self.reaction -= 1,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
