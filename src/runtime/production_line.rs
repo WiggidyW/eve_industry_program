@@ -27,12 +27,6 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
     ) -> Self {
         Self {
             inner,
-            export_pipe,
-            import_src_market_pipes,
-            import_src_intermediate_production_lines: RefCell::new(
-                HashMap::new(),
-            ),
-            db_line,
             installation_cost: {
                 let eiv = db_line
                     .installation_minerals
@@ -46,6 +40,12 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
                     .kind_value(inner.kind);
                 eiv * index_cost * db_line.cost_multiplier
             },
+            export_pipe,
+            import_src_market_pipes,
+            import_src_intermediate_production_lines: RefCell::new(
+                HashMap::new(),
+            ),
+            db_line,
             per_product_mult: db_line.runs as f64 / db_line.portion as f64,
             builds: RefCell::new(0),
         }
@@ -282,13 +282,13 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
             let mut cheapest_market: Option<&LocationMarketOrders<'api>> = None;
             let mut cheapest_reservable = 0.0;
             let mut cheapest_price_with_delivery = f64::INFINITY;
-            for (rate, orders) in self.import_src_market_rates_with_orders() {
+            for (pipe, orders) in self.import_src_market_pipes_with_orders() {
                 if let Some(order) =
                     orders.next_available(Some(context), &item.type_id)
                 {
                     let price_with_delivery = order.price
-                        + rate.m3_rate * volume
-                        + rate.collateral_rate * order.price;
+                        + pipe.delivery_rate().m3_rate * volume
+                        + pipe.delivery_rate().collateral_rate * order.price;
                     if price_with_delivery < cheapest_price_with_delivery {
                         cheapest_market = Some(orders);
                         cheapest_reservable = order.volume;

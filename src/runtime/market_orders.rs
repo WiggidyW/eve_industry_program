@@ -67,7 +67,7 @@ impl<'api> TypeMarketOrders<'api> {
         if reserved >= self.inner.total {
             return None;
         }
-        for order in self.inner.orders {
+        for order in &self.inner.orders {
             current += order.volume;
             if current >= reserved {
                 return Some(api_data::MarketOrder {
@@ -102,12 +102,15 @@ impl<'api> LocationMarketOrders<'api> {
     ) -> Self {
         Self {
             inner: inner
-                .unwrap_or(&HashMap::new())
-                .iter()
-                .map(|(&type_id, orders)| {
-                    (type_id, TypeMarketOrders::new(orders))
+                .map(|inner| {
+                    inner
+                        .iter()
+                        .map(|(&type_id, orders)| {
+                            (type_id, TypeMarketOrders::new(orders))
+                        })
+                        .collect()
                 })
-                .collect(),
+                .unwrap_or(HashMap::new()),
         }
     }
 

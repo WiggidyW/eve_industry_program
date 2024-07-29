@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 mod delivery_route;
 
@@ -18,4 +18,5 @@ use market_orders::*;
 
 pub struct RuntimeData<'cfg, 'db, 'api> {
     pub locations: Vec<Rc<Location<'cfg, 'db, 'api>>>,
+    pub type_volumes: &'db HashMap<u32, f64>,
 }

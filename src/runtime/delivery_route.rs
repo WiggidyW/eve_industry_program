@@ -6,7 +6,7 @@ pub struct DeliveryRoute<'cfg, 'db, 'api> {
     pub inner: &'cfg config::DeliveryRoute,
     pub src: Rc<Location<'cfg, 'db, 'api>>,
     pub dst: Rc<Location<'cfg, 'db, 'api>>,
-    pub pipes: RefCell<Vec<Rc<DeliveryPipe<'cfg, 'db, 'api>>>>,
+    // pub pipes: RefCell<Vec<Rc<DeliveryPipe<'cfg, 'db, 'api>>>>,
 }
 
 impl<'cfg, 'db, 'api> DeliveryRoute<'cfg, 'db, 'api> {
@@ -19,7 +19,7 @@ impl<'cfg, 'db, 'api> DeliveryRoute<'cfg, 'db, 'api> {
             inner,
             src,
             dst,
-            pipes: RefCell::new(Vec::new()),
+            // pipes: RefCell::new(Vec::new()),
         }
     }
 

@@ -5,6 +5,10 @@ use crate::config::Item;
 use crate::config::ManufacturingKind;
 use crate::config::ProductionLineExportKind;
 use crate::industry_db;
+use std::cell::Ref;
+use std::collections::hash_map::Values;
+use std::iter::Cloned;
+use std::ops::Deref;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 fn deduplicate_locations<'iter, 'cfg, 'db, 'api>(
@@ -31,7 +35,9 @@ fn assets_target<'cfg, 'db, 'api>(
     for location in locations.iter() {
         for production_line in location
             .production
-            .map(|p| p.production_lines.borrow().values())
+            .as_ref()
+            .map(|p| p.production_lines.borrow())
+            .map(|pls| pls.values())
             .into_iter()
             .flatten()
             .flatten()
@@ -104,7 +110,7 @@ pub fn new_locations<'cfg, 'db, 'api>(
     market_orders: &'api HashMap<u64, HashMap<u32, api_data::TypeMarketOrders>>,
     assets: &'api HashMap<u64, HashMap<Item, i64>>,
 ) -> Vec<Rc<Location<'cfg, 'db, 'api>>> {
-    let mut locations = cfg_locations
+    let locations = cfg_locations
         .iter()
         .map(|l| {
             (
@@ -154,12 +160,12 @@ pub fn new_locations<'cfg, 'db, 'api>(
                 panic!("pipe not connected to location");
             }
         }
-        for (cfg_pipe_id, cfg_pipe) in cfg_location.pipes.iter() {
-            let pipe = pipes[cfg_pipe_id].clone();
-            for route in pipe.routes.iter() {
-                route.pipes.borrow_mut().push(pipe);
-            }
-        }
+        // for (cfg_pipe_id, cfg_pipe) in cfg_location.pipes.iter() {
+        //     let pipe = &pipes[cfg_pipe_id];
+        //     for route in pipe.routes.iter() {
+        //         route.pipes.borrow_mut().push(pipe.clone());
+        //     }
+        // }
     }
 
     let mut production_lines =
@@ -281,7 +287,7 @@ impl<'cfg, 'db, 'api> Location<'cfg, 'db, 'api> {
         self.market.as_ref().unwrap()
     }
 
-    pub fn unwrap_production(&self) -> &LocationProduction {
+    pub fn unwrap_production(&self) -> &LocationProduction<'cfg, 'db, 'api> {
         self.production.as_ref().unwrap()
     }
 
@@ -370,6 +376,56 @@ impl<'cfg, 'db, 'api> LocationProduction<'cfg, 'db, 'api> {
             production_lines: RefCell::new(HashMap::new()),
         }
     }
+
+    // pub fn product_production_lines(
+    //     &self,
+    // ) -> impl Iterator<Item = Rc<ProductionLine<'cfg, 'db, 'api>>> + '_ {
+    //     // struct Iter<'a, 'cfg, 'db, 'api> {
+    //     //     inner: Ref<
+    //     //         'a,
+    //     //         HashMap<Item, Vec<Rc<ProductionLine<'cfg, 'db, 'api>>>>,
+    //     //     >,
+    //     // }
+    //     // impl<'a, 'cfg, 'db, 'api> IntoIterator for Iter<'a, 'cfg, 'db, 'api> {
+    //     //     type Item = Rc<ProductionLine<'cfg, 'db, 'api>>;
+    //     //     type IntoIter = Cloned<
+    //     //         std::iter::Flatten<
+    //     //             std::collections::hash_map::Values<
+    //     //                 'a,
+    //     //                 Item,
+    //     //                 Vec<Rc<ProductionLine<'cfg, 'db, 'api>>>,
+    //     //             >,
+    //     //         >,
+    //     //     >;
+    //     //     fn into_iter(self) -> Self::IntoIter {
+    //     //         self.inner.values().flatten().cloned()
+    //     //     }
+    //     // }
+    //     // ) -> impl Iterator<Item = &ProductionLine<'cfg, 'db, 'api>> {
+    //     // self.production_lines.borrow(), |pls| pls.values())
+    //     // Ref::map(self.production_lines.borrow(), |pls| pls.values())
+    //     // Box::leak(Box::new(self.production_lines.borrow()))
+    //     //     .values()
+    //     //     .flatten()
+    //     //     .map(|pl| pl.as_ref())
+    //     // Ref::map(
+    //     //     self.production_lines.borrow(),
+    //     //     |pls| pls.iter(),
+    //     // )
+    //     // let test = self.production_lines
+    //     //     .borrow()
+    //     //     .values();
+    //     // Iter {
+    //     //     inner: self.production_lines.borrow(),
+    //     // }
+    //     // unimplemented!()
+    //     self.production_lines
+    //         .borrow()
+    //         .deref()
+    //         .values()
+    //         .flatten()
+    //         .cloned()
+    // }
 }
 
 pub struct LocationMarket<'cfg, 'api> {
