@@ -71,6 +71,14 @@ pub struct SlotCount {
 }
 
 impl SlotCount {
+    pub fn new() -> SlotCount {
+        SlotCount {
+            manufacture: 0,
+            reaction: 0,
+            science: 0,
+        }
+    }
+
     pub fn can_fit(&self, other: &SlotCount) -> bool {
         self.manufacture >= other.manufacture
             && self.reaction >= other.reaction
@@ -83,6 +91,15 @@ impl SlotCount {
             JobKind::Copying => self.science -= 1,
             JobKind::Invention => self.science -= 1,
             JobKind::Reaction => self.reaction -= 1,
+        }
+    }
+
+    pub fn add(&mut self, slot: JobKind) {
+        match slot {
+            JobKind::Manufacturing => self.manufacture += 1,
+            JobKind::Copying => self.science += 1,
+            JobKind::Invention => self.science += 1,
+            JobKind::Reaction => self.reaction += 1,
         }
     }
 }

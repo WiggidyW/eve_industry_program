@@ -19,38 +19,56 @@ pub struct ConfigDataContext {
 pub struct Skills(HashMap<TypeId, u8>);
 
 impl Skills {
-    pub fn me(&self, item: Item, job_kind: JobKind) -> f64 {
+    pub fn me(
+        &self,
+        blueprint: Blueprint,
+        product: Item,
+        kind: JobKind,
+        decryptor: Option<TypeId>,
+    ) -> f64 {
         let mut skill_me = 1.0;
         for (skill_type_id, skill_level) in self.0.iter() {
             skill_me *= Skill {
                 kind: *skill_type_id,
                 level: *skill_level,
             }
-            .me(item, job_kind);
+            .me(blueprint, product, kind, decryptor);
         }
         skill_me
     }
 
-    pub fn te(&self, item: Item, job_kind: JobKind) -> f64 {
+    pub fn te(
+        &self,
+        blueprint: Blueprint,
+        product: Item,
+        kind: JobKind,
+        decryptor: Option<TypeId>,
+    ) -> f64 {
         let mut skill_te = 1.0;
         for (skill_type_id, skill_level) in self.0.iter() {
             skill_te *= Skill {
                 kind: *skill_type_id,
                 level: *skill_level,
             }
-            .te(item, job_kind);
+            .te(blueprint, product, kind, decryptor);
         }
         skill_te
     }
 
-    pub fn ce(&self, item: Item, job_kind: JobKind) -> f64 {
+    pub fn ce(
+        &self,
+        blueprint: Blueprint,
+        product: Item,
+        kind: JobKind,
+        decryptor: Option<TypeId>,
+    ) -> f64 {
         let mut skill_ce = 1.0;
         for (skill_type_id, skill_level) in self.0.iter() {
             skill_ce *= Skill {
                 kind: *skill_type_id,
                 level: *skill_level,
             }
-            .ce(item, job_kind);
+            .ce(blueprint, product, kind, decryptor);
         }
         skill_ce
     }
@@ -65,15 +83,11 @@ pub enum Rigs {
 
 pub struct CollateralOverride(HashMap<TypeId, f64>);
 
-pub enum Structure {
-    Structure(TypeId),
-    Station,
-}
-
 pub struct Location {
     pub id: LocationId,
     pub name: String,
     pub system_id: SystemId,
+    pub security: Security,
     pub production: Option<LocationProduction>,
     pub market: Option<LocationMarket>,
 }
@@ -203,7 +217,7 @@ impl Index<DeliveryPipeId> for DeliveryPipes {
 
 pub enum ProductionLineExportKind {
     Product,
-    IntermediateMaterial,
+    Intermediate,
 }
 
 // pub struct ProductionLineExport {
@@ -239,10 +253,6 @@ pub struct ProductionLine {
 }
 
 impl ProductionLine {
-    pub fn num_produced(&self, ctx: &ConfigDataContext) -> u64 {
-        unimplemented!()
-    }
-
     pub fn cost_efficiency(&self) -> f64 {
         unimplemented!()
     }
@@ -251,17 +261,42 @@ impl ProductionLine {
         unimplemented!()
     }
 
-    pub fn max_slot_usage(&self) -> SlotCount {
+    pub fn time_efficiency(&self) -> f64 {
         unimplemented!()
     }
 
+    pub fn num_produced(&self, cfg_ctx: &ConfigDataContext) -> f64 {
+        per_run_num_produced(
+            self.blueprint,
+            self.item.type_id(),
+            self.job_kind,
+            self.decryptor,
+        ) * self.num_runs(cfg_ctx) as f64
+    }
+
+    pub fn max_slot_usage(&self, cfg_ctx: &ConfigDataContext) -> SlotCount {
+        let mut slot_count = SlotCount::new();
+        slot_count.add(self.job_kind);
+        for production_line in self.sub_lines(cfg_ctx) {
+            slot_count.add(production_line.job_kind);
+        }
+        slot_count
+    }
+
     pub fn time_per_run(&self) -> Duration {
-        unimplemented!()
+        let base_duration = raw_time_per_run(
+            self.blueprint,
+            self.item.type_id(),
+            self.job_kind,
+            self.decryptor,
+        );
+        let te = self.time_efficiency();
+        Duration::from_secs_f64(base_duration.as_secs_f64() * te)
     }
 
     pub fn intermediate(&self) -> bool {
         match self.export_kind {
-            ProductionLineExportKind::IntermediateMaterial => true,
+            ProductionLineExportKind::Intermediate => true,
             _ => false,
         }
     }

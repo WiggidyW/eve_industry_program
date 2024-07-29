@@ -15,19 +15,19 @@ pub struct ApiDataContext {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MarketOrder {
     pub price: f64,
-    pub volume: u64,
+    pub volume: f64,
 }
 
 #[derive(Debug, Clone)]
 pub struct TypeMarketOrders {
     orders: Rc<Vec<MarketOrder>>, // cheapest first
-    reserved: u64,
-    total: u64,
+    reserved: f64,
+    total: f64,
 }
 
 impl TypeMarketOrders {
     fn next_available(&self) -> Option<MarketOrder> {
-        let mut current = 0;
+        let mut current = 0.0;
         for market_order in self.orders.as_ref() {
             current += market_order.volume;
             if current > self.reserved {
@@ -44,7 +44,7 @@ impl TypeMarketOrders {
         self.orders.as_ref().first().map(|order| order.price)
     }
 
-    fn reserve(&mut self, volume: u64) {
+    fn reserve(&mut self, volume: f64) {
         self.reserved += volume;
     }
 }
@@ -65,7 +65,7 @@ impl LocationMarketOrders {
             .and_then(|type_market_orders| type_market_orders.min_sell())
     }
 
-    fn reserve(&mut self, type_id: TypeId, volume: u64) {
+    fn reserve(&mut self, type_id: TypeId, volume: f64) {
         self.0.get_mut(&type_id).unwrap().reserve(volume);
     }
 }
@@ -94,21 +94,21 @@ impl MarketOrders {
         })
     }
 
-    pub fn volume(&self, location_id: LocationId, type_id: TypeId) -> u64 {
+    pub fn volume(&self, location_id: LocationId, type_id: TypeId) -> f64 {
         self.0
             .get(&location_id)
             .and_then(|location_market_orders| {
                 location_market_orders.0.get(&type_id)
             })
             .map(|type_market_orders| type_market_orders.total)
-            .unwrap_or(0)
+            .unwrap_or(0.0)
     }
 
     pub fn reserve(
         &mut self,
         location_id: LocationId,
         type_id: TypeId,
-        volume: u64,
+        volume: f64,
     ) {
         self.0
             .get_mut(&location_id)
@@ -150,7 +150,7 @@ impl Index<SystemId> for CostIndices {
     }
 }
 
-pub struct LocationAssets(HashMap<Item, u64>);
+pub struct LocationAssets(HashMap<Item, f64>);
 
 pub struct Assets(HashMap<LocationId, LocationAssets>);
 
@@ -163,7 +163,7 @@ impl Assets {
         &mut self,
         location_id: LocationId,
         item: Item,
-        amount: u64,
+        amount: f64,
     ) {
         self.0
             .entry(location_id)
@@ -174,12 +174,12 @@ impl Assets {
             .or_insert(amount);
     }
 
-    pub fn get_amount(&self, location_id: LocationId, item: Item) -> u64 {
+    pub fn get_amount(&self, location_id: LocationId, item: Item) -> f64 {
         self.0
             .get(&location_id)
             .and_then(|location_assets| location_assets.0.get(&item))
             .copied()
-            .unwrap_or(0)
+            .unwrap_or(0.0)
     }
 }
 

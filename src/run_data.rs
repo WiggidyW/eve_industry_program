@@ -13,21 +13,21 @@ impl Deliveries {
         &self,
         delivery_pipe_id: DeliveryPipeId,
         item: Item,
-    ) -> u64 {
+    ) -> f64 {
         self.0
             .get(&delivery_pipe_id)
             .and_then(|delivery_route_deliveries| {
                 delivery_route_deliveries.0.get(&item)
             })
             .copied()
-            .unwrap_or(0)
+            .unwrap_or(0.0)
     }
 
     pub fn make_delivery(
         &mut self,
         delivery_pipe_id: DeliveryPipeId,
         item: Item,
-        amount: u64,
+        amount: f64,
     ) {
         self.0
             .entry(delivery_pipe_id)
@@ -44,11 +44,11 @@ impl Deliveries {
         api_ctx: &ApiDataContext,
         location_id: LocationId,
         item: Item,
-    ) -> u64 {
+    ) -> f64 {
         let mut available = api_ctx.assets.get_amount(location_id, item);
         for &delivery_pipe_id in self.0.keys() {
             let delivery_amount = self.get_amount(delivery_pipe_id, item);
-            if delivery_amount == 0 {
+            if delivery_amount == 0.0 {
                 continue;
             }
             let delivery_pipe = &cfg_ctx.delivery_pipes[delivery_pipe_id];
@@ -65,7 +65,7 @@ impl Deliveries {
     }
 }
 
-pub struct DeliveryRouteDeliveries(HashMap<Item, u64>);
+pub struct DeliveryRouteDeliveries(HashMap<Item, f64>);
 
 pub struct Builds(HashMap<ProductionLineId, u32>);
 

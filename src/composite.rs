@@ -10,6 +10,7 @@ fn per_run_installation_cost(
     api_ctx: &ApiDataContext,
 ) -> f64 {
     let materials = per_run_raw_job_materials(
+        production_line.blueprint,
         production_line.item.type_id(),
         production_line.job_kind,
         None, // decryptor doesn't matter for installation cost
@@ -34,6 +35,7 @@ fn per_run_raw_job_materials_with_me(
 ) -> impl Iterator<Item = (TypeId, f64)> {
     let material_efficiency = production_line.material_efficiency();
     per_run_raw_job_materials(
+        production_line.blueprint,
         production_line.item.type_id(),
         production_line.job_kind,
         production_line.decryptor,
@@ -60,8 +62,8 @@ fn raw_job_materials_with_me(
 
 fn ceil_materials<'cfg>(
     iter: impl Iterator<Item = (Item, f64)> + 'cfg,
-) -> impl Iterator<Item = (Item, u64)> + 'cfg {
-    iter.map(|(item, quantity)| (item, quantity.ceil() as u64))
+) -> impl Iterator<Item = (Item, f64)> + 'cfg {
+    iter.map(|(item, quantity)| (item, quantity.ceil()))
 }
 
 fn job_materials_market_provided<'cfg>(
@@ -85,7 +87,7 @@ fn job_materials_market_provided<'cfg>(
 fn ceil_job_materials_market_provided<'cfg>(
     production_line: &'cfg ProductionLine,
     num_runs: f64,
-) -> impl Iterator<Item = (Item, u64)> + 'cfg {
+) -> impl Iterator<Item = (Item, f64)> + 'cfg {
     ceil_materials(
         job_materials_market_provided(production_line, num_runs)
             .map(|(type_id, quantity)| (Item::Item(type_id), quantity)),
@@ -128,7 +130,7 @@ fn ceil_job_materials_sub_line_provided<'cfg>(
     production_line: &'cfg ProductionLine,
     cfg_ctx: &'cfg ConfigDataContext,
     num_runs: f64,
-) -> impl Iterator<Item = (Item, u64)> + 'cfg {
+) -> impl Iterator<Item = (Item, f64)> + 'cfg {
     ceil_materials(job_materials_sub_line_provided(
         production_line,
         cfg_ctx,
@@ -139,16 +141,16 @@ fn ceil_job_materials_sub_line_provided<'cfg>(
 fn ceil_job_materials<'cfg>(
     production_line: &'cfg ProductionLine,
     cfg_ctx: &'cfg ConfigDataContext,
-) -> impl Iterator<Item = (Item, u64)> + 'cfg {
-    let num_runs = production_line.num_runs(cfg_ctx) as f64;
+) -> impl Iterator<Item = (Item, f64)> + 'cfg {
+    let num_runs = production_line.num_runs(cfg_ctx);
     let market_provided = ceil_materials(
-        job_materials_market_provided(production_line, num_runs)
+        job_materials_market_provided(production_line, num_runs as f64)
             .map(|(type_id, quantity)| (Item::Item(type_id), quantity)),
     );
     let sub_line_provided = ceil_materials(job_materials_sub_line_provided(
         production_line,
         cfg_ctx,
-        num_runs,
+        num_runs as f64,
     ));
     market_provided.chain(sub_line_provided)
 }
@@ -170,7 +172,7 @@ fn market_cost_with_delivery(
         let mut type_cost: f64 = 0.0;
         while reserved < quantity {
             let mut cheapest_market: Option<LocationId> = None;
-            let mut cheapest_reservable = 0;
+            let mut cheapest_reservable = 0.0;
             let mut cheapest_price_with_delivery = f64::INFINITY;
             for (location, rate) in &src_markets {
                 if let Some(order) =
@@ -189,7 +191,7 @@ fn market_cost_with_delivery(
             if let Some(location_id) = cheapest_market {
                 let cheapest_reserve =
                     (cheapest_reservable as f64).min(quantity - reserved);
-                let cheapest_reserve_whole = cheapest_reserve.floor() as u64;
+                let cheapest_reserve_whole = cheapest_reserve.floor();
                 reserved += cheapest_reserve;
                 type_cost += cheapest_price_with_delivery * cheapest_reserve;
                 market_orders.reserve(
@@ -217,6 +219,7 @@ fn market_revenue_with_delivery(
     let rate = dst_pipe.rate(cfg_ctx);
     let type_volume = type_volume(production_line.item.type_id());
     let per_run_quantity = per_run_product_quantity(
+        production_line.blueprint,
         production_line.item.type_id(),
         production_line.job_kind,
         production_line.decryptor,
@@ -310,13 +313,13 @@ fn can_build(
     slots: &SlotCount,
     // market_orders: &mut MarketOrders,
 ) -> bool {
-    if !slots.can_fit(&production_line.max_slot_usage()) {
+    if !slots.can_fit(&production_line.max_slot_usage(cfg_ctx)) {
         false
     } else if builds.get(production_line_id) >= production_line.parallel {
         false
     } else {
         match production_line.export_kind {
-            ProductionLineExportKind::IntermediateMaterial => {
+            ProductionLineExportKind::Intermediate => {
                 let num_stored = api_ctx
                     .assets
                     .get_amount(production_line.location, production_line.item);
@@ -335,7 +338,7 @@ fn can_build(
                         .dst_location_id(cfg_ctx),
                     production_line.item,
                 );
-                let num_built = builds.get(production_line_id) as u64
+                let num_built = builds.get(production_line_id) as f64
                     * production_line.num_produced(cfg_ctx);
                 let num_needed = stock_targets.get_amount(
                     production_line
@@ -454,11 +457,11 @@ fn do_market_imports(
         production_line.num_runs(cfg_ctx) as f64,
     ) {
         let type_volume = type_volume(item.type_id());
-        let mut reserved = 0;
+        let mut reserved = 0.0;
         while reserved < quantity {
             let mut cheapest_market: Option<LocationId> = None;
             let mut cheapest_pipe_id: Option<DeliveryPipeId> = None;
-            let mut cheapest_reservable = 0;
+            let mut cheapest_reservable = 0.0;
             let mut cheapest_price_with_delivery = f64::INFINITY;
             for (location, pipe_id, rate) in &src_markets {
                 if let Some(order) =
@@ -492,7 +495,7 @@ fn do_market_imports(
             } else {
                 let mut highest_volume_market: Option<LocationId> = None;
                 let mut highest_volume_pipe_id: Option<DeliveryPipeId> = None;
-                let mut highest_volume = 0;
+                let mut highest_volume = 0.0;
                 for (location, pipe_id, _) in &src_markets {
                     let volume =
                         market_orders.volume(location.id, item.type_id());
@@ -533,7 +536,7 @@ pub fn stock_targets(cfg_ctx: &ConfigDataContext) -> Assets {
                 assets.add_amount(
                     location_id,
                     item,
-                    quantity * production_line.parallel as u64,
+                    quantity * production_line.parallel as f64,
                 );
             }
         }
@@ -549,7 +552,7 @@ pub fn stock_targets(cfg_ctx: &ConfigDataContext) -> Assets {
                 assets.add_amount(
                     location_id,
                     item,
-                    quantity * production_line.parallel as u64,
+                    quantity * production_line.parallel as f64,
                 );
             }
         }
@@ -562,7 +565,7 @@ pub fn stock_targets(cfg_ctx: &ConfigDataContext) -> Assets {
                 assets.add_amount(
                     location_id,
                     production_line.item,
-                    quantity * production_line.parallel as u64,
+                    quantity * production_line.parallel as f64,
                 );
             }
         }
