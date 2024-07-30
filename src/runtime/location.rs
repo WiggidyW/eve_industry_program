@@ -1,14 +1,11 @@
 use super::*;
 use crate::api_data_rename as api_data;
 use crate::config;
+use crate::config::IndustrySlots;
 use crate::config::Item;
-use crate::config::ManufacturingKind;
 use crate::config::ProductionLineExportKind;
 use crate::industry_db;
 use std::cell::Ref;
-use std::collections::hash_map::Values;
-use std::iter::Cloned;
-use std::ops::Deref;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 fn deduplicate_locations<'iter, 'cfg, 'db, 'api>(
@@ -32,16 +29,8 @@ fn assets_target<'cfg, 'db, 'api>(
     locations: &[Rc<Location<'cfg, 'db, 'api>>],
 ) -> HashMap<u64, HashMap<Item, i64>> {
     let mut assets_target = HashMap::<u64, HashMap<Item, i64>>::new();
-    for location in locations.iter() {
-        for production_line in location
-            .production
-            .as_ref()
-            .map(|p| p.production_lines.borrow())
-            .map(|pls| pls.values())
-            .into_iter()
-            .flatten()
-            .flatten()
-        {
+    for location in locations {
+        for production_line in location.production_lines().iter_all() {
             // add product to locations along export pipe
             // only do this for products, as intermediates will be added by the import
             if production_line.export_kind()
@@ -100,6 +89,41 @@ fn assets_target<'cfg, 'db, 'api>(
         }
     }
     assets_target
+}
+
+pub fn build_in_locations<'cfg, 'db, 'api>(
+    locations: &[Rc<Location<'cfg, 'db, 'api>>],
+    slots: &mut IndustrySlots,
+    type_volumes: &HashMap<u32, f64>,
+) {
+    loop {
+        let mut best = None;
+        for location in locations.iter() {
+            for production_line in
+                location.production_lines().iter_export_product()
+            {
+                if production_line.can_build(slots) {
+                    if let Some(profit) =
+                        production_line.profit(None, None, type_volumes)
+                    {
+                        if profit
+                            > best.as_ref().map(|(_, p)| *p).unwrap_or(0.0)
+                        {
+                            best = Some((production_line.clone(), profit));
+                        }
+                    }
+                }
+            }
+        }
+        match best {
+            Some((production_line, _)) => {
+                production_line.build(slots, type_volumes);
+            }
+            None => {
+                break;
+            }
+        }
+    }
 }
 
 pub fn new_locations<'cfg, 'db, 'api>(
@@ -307,6 +331,15 @@ impl<'cfg, 'db, 'api> Location<'cfg, 'db, 'api> {
             .unwrap_or(0)
     }
 
+    pub fn production_lines(
+        &self,
+    ) -> LocationProductionLines<'_, 'cfg, 'db, 'api> {
+        match self.production.as_ref() {
+            Some(p) => p.production_lines(),
+            None => LocationProductionLines { inner: None },
+        }
+    }
+
     pub fn num_available(&self, context: Option<u64>, item: Item) -> i64 {
         // add number of item present in assets
         let mut available = self
@@ -377,55 +410,47 @@ impl<'cfg, 'db, 'api> LocationProduction<'cfg, 'db, 'api> {
         }
     }
 
-    // pub fn product_production_lines(
-    //     &self,
-    // ) -> impl Iterator<Item = Rc<ProductionLine<'cfg, 'db, 'api>>> + '_ {
-    //     // struct Iter<'a, 'cfg, 'db, 'api> {
-    //     //     inner: Ref<
-    //     //         'a,
-    //     //         HashMap<Item, Vec<Rc<ProductionLine<'cfg, 'db, 'api>>>>,
-    //     //     >,
-    //     // }
-    //     // impl<'a, 'cfg, 'db, 'api> IntoIterator for Iter<'a, 'cfg, 'db, 'api> {
-    //     //     type Item = Rc<ProductionLine<'cfg, 'db, 'api>>;
-    //     //     type IntoIter = Cloned<
-    //     //         std::iter::Flatten<
-    //     //             std::collections::hash_map::Values<
-    //     //                 'a,
-    //     //                 Item,
-    //     //                 Vec<Rc<ProductionLine<'cfg, 'db, 'api>>>,
-    //     //             >,
-    //     //         >,
-    //     //     >;
-    //     //     fn into_iter(self) -> Self::IntoIter {
-    //     //         self.inner.values().flatten().cloned()
-    //     //     }
-    //     // }
-    //     // ) -> impl Iterator<Item = &ProductionLine<'cfg, 'db, 'api>> {
-    //     // self.production_lines.borrow(), |pls| pls.values())
-    //     // Ref::map(self.production_lines.borrow(), |pls| pls.values())
-    //     // Box::leak(Box::new(self.production_lines.borrow()))
-    //     //     .values()
-    //     //     .flatten()
-    //     //     .map(|pl| pl.as_ref())
-    //     // Ref::map(
-    //     //     self.production_lines.borrow(),
-    //     //     |pls| pls.iter(),
-    //     // )
-    //     // let test = self.production_lines
-    //     //     .borrow()
-    //     //     .values();
-    //     // Iter {
-    //     //     inner: self.production_lines.borrow(),
-    //     // }
-    //     // unimplemented!()
-    //     self.production_lines
-    //         .borrow()
-    //         .deref()
-    //         .values()
-    //         .flatten()
-    //         .cloned()
-    // }
+    pub fn production_lines(
+        &self,
+    ) -> LocationProductionLines<'_, 'cfg, 'db, 'api> {
+        LocationProductionLines {
+            inner: Some(self.production_lines.borrow()),
+        }
+    }
+}
+
+pub struct LocationProductionLines<'lp, 'cfg, 'db, 'api> {
+    inner: Option<
+        Ref<'lp, HashMap<Item, Vec<Rc<ProductionLine<'cfg, 'db, 'api>>>>>,
+    >,
+}
+
+impl<'lp, 'cfg, 'db, 'api> LocationProductionLines<'lp, 'cfg, 'db, 'api> {
+    pub fn iter_all(
+        &self,
+    ) -> impl Iterator<Item = &Rc<ProductionLine<'cfg, 'db, 'api>>> {
+        self.inner
+            .as_ref()
+            .map(|pls_map| pls_map.values().map(|pls| pls.iter()))
+            .into_iter()
+            .flatten()
+            .flatten()
+    }
+
+    pub fn iter_export_product(
+        &self,
+    ) -> impl Iterator<Item = &Rc<ProductionLine<'cfg, 'db, 'api>>> {
+        self.iter_all()
+            .filter(|pl| pl.export_kind() == ProductionLineExportKind::Product)
+    }
+
+    pub fn iter_export_intermediate(
+        &self,
+    ) -> impl Iterator<Item = &Rc<ProductionLine<'cfg, 'db, 'api>>> {
+        self.iter_all().filter(|pl| {
+            pl.export_kind() == ProductionLineExportKind::Intermediate
+        })
+    }
 }
 
 pub struct LocationMarket<'cfg, 'api> {

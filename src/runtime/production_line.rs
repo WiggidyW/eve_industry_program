@@ -54,21 +54,21 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
     pub fn import_src_intermediate_production_line(
         &self,
         type_id: &u32,
-    ) -> Option<&ProductionLine<'cfg, 'db, 'api>> {
+    ) -> Option<Rc<ProductionLine<'cfg, 'db, 'api>>> {
         self.import_src_intermediate_production_lines
             .borrow()
             .get(type_id)
-            .map(|pl| pl.as_ref())
+            .map(|pl| pl.clone())
     }
 
     pub fn import_src_intermediate_pipe(
         &self,
         type_id: &u32,
-    ) -> Option<&DeliveryPipe<'cfg, 'db, 'api>> {
+    ) -> Option<Rc<DeliveryPipe<'cfg, 'db, 'api>>> {
         self.import_src_intermediate_production_lines
             .borrow()
             .get(type_id)
-            .map(|pl| pl.export_pipe())
+            .map(|pl| pl.export_pipe.clone())
     }
 
     pub fn export_pipe(&self) -> &DeliveryPipe<'cfg, 'db, 'api> {
