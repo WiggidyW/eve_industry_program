@@ -39,7 +39,10 @@ pub trait IndustryDatabase: Send + Sync {
         max_duration: Duration,
         decryptor: Option<TypeId>,
     ) -> Result<Line, crate::Error>;
-    async fn get_volume(&self, item: Item) -> Result<Volume, crate::Error>;
+    async fn get_volume(
+        &self,
+        item: Item,
+    ) -> Result<Option<Volume>, crate::Error>;
 }
 
 pub async fn new_industry_database(

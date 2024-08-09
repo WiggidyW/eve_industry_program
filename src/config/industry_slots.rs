@@ -22,6 +22,7 @@ impl IndustrySlot {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct IndustrySlots {
     pub manufacturing: usize,
     pub reaction: usize,

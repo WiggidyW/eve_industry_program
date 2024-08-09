@@ -1,9 +1,9 @@
 use crate::{
-    api_data_rename as api_data,
-    config::{self, Item},
+    api_data,
+    config::{self, IndustrySlots, Item},
     industry_db,
 };
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc, time::Duration};
 
 mod delivery_route;
 
@@ -21,16 +21,23 @@ use production_line::*;
 mod market_orders;
 use market_orders::*;
 
+mod db_line_transformed;
+use db_line_transformed::*;
+
 pub struct RuntimeData<'cfg, 'db, 'api> {
     pub locations: Vec<Rc<Location<'cfg, 'db, 'api>>>,
-    pub type_volumes: &'db HashMap<u32, f64>,
+    pub type_volumes: &'db HashMap<Item, f64>,
+    pub slots: IndustrySlots,
 }
 
 impl<'cfg, 'db, 'api> RuntimeData<'cfg, 'db, 'api> {
     pub fn new(
         cfg_locations: &'cfg [config::Location],
+        cfg_slots: &'cfg IndustrySlots,
+        max_time: Duration,
+        daily_flex_time: Duration,
         db_lines: &'db HashMap<u32, industry_db::Line>,
-        type_volumes: &'db HashMap<u32, f64>,
+        type_volumes: &'db HashMap<Item, f64>,
         adjusted_prices: &'api HashMap<u32, f64>,
         cost_indices: &'api HashMap<u32, config::ManufacturingValue>,
         market_orders: &'api HashMap<
@@ -47,8 +54,15 @@ impl<'cfg, 'db, 'api> RuntimeData<'cfg, 'db, 'api> {
                 cost_indices,
                 market_orders,
                 assets,
+                max_time,
+                daily_flex_time,
             ),
             type_volumes,
+            slots: cfg_slots.clone(),
         }
+    }
+
+    pub fn build(&mut self) {
+        build_in_locations(&self.locations, &mut self.slots, self.type_volumes);
     }
 }

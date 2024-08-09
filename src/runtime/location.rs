@@ -1,5 +1,5 @@
 use super::*;
-use crate::api_data_rename as api_data;
+use crate::api_data;
 use crate::config;
 use crate::config::IndustrySlots;
 use crate::config::Item;
@@ -94,7 +94,7 @@ fn assets_target<'cfg, 'db, 'api>(
 pub fn build_in_locations<'cfg, 'db, 'api>(
     locations: &[Rc<Location<'cfg, 'db, 'api>>],
     slots: &mut IndustrySlots,
-    type_volumes: &HashMap<u32, f64>,
+    type_volumes: &HashMap<Item, f64>,
 ) {
     loop {
         let mut best = None;
@@ -133,6 +133,8 @@ pub fn new_locations<'cfg, 'db, 'api>(
     cost_indices: &'api HashMap<u32, config::ManufacturingValue>,
     market_orders: &'api HashMap<u64, HashMap<u32, api_data::TypeMarketOrders>>,
     assets: &'api HashMap<u64, HashMap<Item, i64>>,
+    max_time: Duration,
+    daily_flex_time: Duration,
 ) -> Vec<Rc<Location<'cfg, 'db, 'api>>> {
     let locations = cfg_locations
         .iter()
@@ -218,6 +220,8 @@ pub fn new_locations<'cfg, 'db, 'api>(
                 &db_lines[&cfg_production_line.id],
                 adjusted_prices,
                 cost_indices,
+                max_time,
+                daily_flex_time,
             ));
             production_lines
                 .insert(cfg_production_line.id, production_line.clone());

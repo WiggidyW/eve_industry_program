@@ -17,7 +17,10 @@ pub trait InnerDatabase: Send + Sync {
         system_id: SystemId, // ignored if include_security is false
         include: DatabaseParamsInclude,
     ) -> Result<DatabaseResponse, Self::Error>;
-    async fn get_volume(&self, item: TypeId) -> Result<Volume, Self::Error>;
+    async fn get_volume(
+        &self,
+        item: TypeId,
+    ) -> Result<Option<Volume>, Self::Error>;
 }
 
 impl<T> IndustryDatabase for T
@@ -61,7 +64,10 @@ where
             decryptor,
         )
     }
-    async fn get_volume(&self, item: Item) -> Result<Volume, crate::Error> {
+    async fn get_volume(
+        &self,
+        item: Item,
+    ) -> Result<Option<Volume>, crate::Error> {
         self.get_volume(item.type_id)
             .await
             .map_err(|e| crate::Error::IndustryDbError(e.into()))

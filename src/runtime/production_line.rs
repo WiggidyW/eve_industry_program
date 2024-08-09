@@ -10,7 +10,7 @@ pub struct ProductionLine<'cfg, 'db, 'api> {
     pub import_src_market_pipes: Vec<Rc<DeliveryPipe<'cfg, 'db, 'api>>>,
     pub import_src_intermediate_production_lines:
         RefCell<HashMap<u32, Rc<ProductionLine<'cfg, 'db, 'api>>>>,
-    pub db_line: &'db industry_db::Line,
+    pub db_line: DbLineTransformed<'db>,
     pub installation_cost: f64,
     pub per_product_mult: f64,
     pub builds: RefCell<i64>,
@@ -24,29 +24,34 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
         db_line: &'db industry_db::Line,
         adjusted_prices: &'api HashMap<u32, f64>,
         cost_indices: &'api HashMap<u32, config::ManufacturingValue>,
+        max_time: Duration,
+        daily_flex_time: Duration,
     ) -> Self {
+        let db_line =
+            DbLineTransformed::new(db_line, max_time, daily_flex_time);
+        let installation_cost = {
+            let eiv = db_line
+                .installation_minerals()
+                .map(|(item, quantity)| {
+                    let price = adjusted_prices.get(&item.type_id).unwrap();
+                    *price * quantity as f64
+                })
+                .sum::<f64>();
+            let index_cost = cost_indices[&export_pipe.src().system_id()]
+                .kind_value(inner.kind);
+            eiv * index_cost * db_line.cost_multiplier()
+        };
+        let per_product_mult = db_line.runs() as f64 / db_line.portion() as f64;
         Self {
             inner,
-            installation_cost: {
-                let eiv = db_line
-                    .installation_minerals
-                    .iter()
-                    .map(|(item, quantity)| {
-                        let price = adjusted_prices.get(&item.type_id).unwrap();
-                        *price * *quantity as f64
-                    })
-                    .sum::<f64>();
-                let index_cost = cost_indices[&export_pipe.src().system_id()]
-                    .kind_value(inner.kind);
-                eiv * index_cost * db_line.cost_multiplier
-            },
+            installation_cost,
             export_pipe,
             import_src_market_pipes,
             import_src_intermediate_production_lines: RefCell::new(
                 HashMap::new(),
             ),
             db_line,
-            per_product_mult: db_line.runs as f64 / db_line.portion as f64,
+            per_product_mult,
             builds: RefCell::new(0),
         }
     }
@@ -92,16 +97,14 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
             None => 1.0,
         };
         self.db_line
-            .minerals
-            .iter()
-            .copied()
+            .minerals()
             .map(move |(item, quantity)| (item, quantity as f64 * mult))
     }
 
     pub fn minerals_i64(
         &self,
     ) -> impl Iterator<Item = (config::Item, i64)> + '_ {
-        self.db_line.minerals.iter().copied()
+        self.db_line.minerals()
     }
 
     fn import_src_market_locations<'this>(
@@ -194,7 +197,7 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
     }
 
     pub fn portion(&self) -> i64 {
-        self.db_line.portion
+        self.db_line.portion()
     }
 
     pub fn max_slots(&self) -> config::IndustrySlots {
@@ -213,9 +216,9 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
         &self,
         item: &Item,
         quantity: i64,
-        type_volumes: &HashMap<u32, f64>,
+        type_volumes: &HashMap<Item, f64>,
     ) {
-        let volume = type_volumes.get(&item.type_id).copied().unwrap_or(0.0);
+        let volume = type_volumes.get(&item).copied().unwrap_or(0.0);
         let mut reserved = 0;
         while reserved < quantity {
             let mut cheapest_market = None;
@@ -273,9 +276,9 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
         context: u64,
         item: &Item,
         quantity: f64,
-        type_volumes: &HashMap<u32, f64>,
+        type_volumes: &HashMap<Item, f64>,
     ) -> Option<f64> {
-        let volume = type_volumes.get(&item.type_id).copied().unwrap_or(0.0);
+        let volume = type_volumes.get(&item).copied().unwrap_or(0.0);
         let mut reserved = 0.0;
         let mut type_cost = 0.0;
         while reserved < quantity {
@@ -309,7 +312,7 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
         &self,
         context: u64,
         num_produced: Option<f64>,
-        type_volumes: &HashMap<u32, f64>,
+        type_volumes: &HashMap<Item, f64>,
     ) -> Option<f64> {
         let mut cost = 0.0;
         for (item, quantity) in self.minerals(num_produced) {
@@ -336,14 +339,12 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
     fn revenue_with_delivery(
         &self,
         num_produced: Option<f64>,
-        type_volumes: &HashMap<u32, f64>,
+        type_volumes: &HashMap<Item, f64>,
         market_cost_with_delivery: f64,
     ) -> f64 {
-        let num_produced = num_produced.unwrap_or(self.db_line.portion as f64);
-        let volume = type_volumes
-            .get(&self.product().type_id)
-            .copied()
-            .unwrap_or(0.0);
+        let num_produced =
+            num_produced.unwrap_or(self.db_line.portion() as f64);
+        let volume = type_volumes.get(&self.product()).copied().unwrap_or(0.0);
         let delivery_rate = self.export_pipe().delivery_rate();
         let min_sell = match self.export_kind() {
             config::ProductionLineExportKind::Product => Some(
@@ -369,7 +370,7 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
         &self,
         context: Option<u64>,
         num_produced: Option<f64>,
-        type_volumes: &HashMap<u32, f64>,
+        type_volumes: &HashMap<Item, f64>,
     ) -> Option<f64> {
         let context = context.unwrap_or(self.profit_context());
         let market_cost_with_delivery = self.market_cost_with_delivery(
@@ -408,7 +409,7 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
     pub fn build(
         &self,
         slots: &mut IndustrySlots,
-        type_volumes: &HashMap<u32, f64>,
+        type_volumes: &HashMap<Item, f64>,
     ) {
         // use build slot
         slots.use_slot(self.slot_kind());

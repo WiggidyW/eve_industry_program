@@ -72,8 +72,16 @@ impl InnerDatabase for SqliteDb {
             security: security,
         })
     }
-    async fn get_volume(&self, item: TypeId) -> Result<Volume, Self::Error> {
-        unimplemented!()
+    async fn get_volume(
+        &self,
+        item: TypeId,
+    ) -> Result<Option<Volume>, Self::Error> {
+        let mut conn = self.inner.acquire().await?;
+        match select_volume(&mut conn, item).await {
+            Ok(v) => Ok(Some(v)),
+            Err(sqlx::Error::RowNotFound) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -125,7 +133,7 @@ async fn select_blueprint(
         blueprint.type_id,
         db_kind,
     )
-    .fetch_one(conn)
+    .fetch_one(&mut **conn)
     .await
     .map(|b| {
         (
@@ -175,7 +183,7 @@ async fn select_minerals(
         "sqlite_build_data/select_minerals.sql",
         id,
     )
-        .fetch(conn)
+        .fetch(&mut **conn)
         .map_ok(|m| (Item::new(m.type_id as TypeId), m.quantity))
         .try_collect()
         .await
@@ -204,7 +212,7 @@ async fn select_rigs_skills_structures(
         kind,
         id,
     )
-    .fetch(conn)
+    .fetch(&mut **conn)
     .map_ok(|e| {
         (
             e.type_id as TypeId,
@@ -236,7 +244,7 @@ async fn select_security(
         "sqlite_build_data/select_security.sql",
         system_id,
     )
-    .fetch_one(conn)
+    .fetch_one(&mut **conn)
     .await
     .map(|s| s.security)
 }
@@ -254,7 +262,7 @@ async fn select_volume(
         "sqlite_build_data/select_volume.sql",
         type_id,
     )
-    .fetch_one(conn)
+    .fetch_one(&mut **conn)
     .await
     .map(|v| v.volume)
 }
