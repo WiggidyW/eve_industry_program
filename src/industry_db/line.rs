@@ -1,11 +1,11 @@
 use super::*;
 
 pub struct Line {
-    pub installation_minerals: Vec<(Item, Quantity)>, // minerals to be used for computing installation cost for N runs
-    pub minerals: Vec<(Item, Quantity)>, // minerals needed for N runs
-    pub portion: Quantity,               // number produced from N runs
-    pub duration: Duration,              // time needed for N runs
-    pub runs: Quantity,                  // number of runs
+    pub installation_minerals: Vec<(Item, i64)>, // minerals to be used for computing installation cost for N runs
+    pub minerals: Vec<(Item, i64)>,              // minerals needed for N runs
+    pub portion: i64,                            // number produced from N runs
+    pub duration: Duration,                      // time needed for N runs
+    pub runs: i64,                               // number of runs
     pub cost_multiplier: f64, // job cost (0.0 - 1.0) * job kind multiplier (0.02 or 1.0) + that * tax
 }
 
@@ -21,14 +21,14 @@ impl Line {
 
     pub fn from_rep(
         db_rep: DatabaseResponse,
-        structure_id: TypeId,
-        rigs: [Option<TypeId>; 3],
+        structure_id: u32,
+        rigs: [Option<u32>; 3],
         tax: config::ManufacturingValue,
         skills: &HashMap<u32, u8>,
         kind: config::ManufacturingKind,
         transput: config::Transput,
         max_duration: Duration,
-        decryptor: Option<TypeId>,
+        decryptor: Option<u32>,
     ) -> Result<Line, crate::Error> {
         let num_runs = match kind {
             ManufacturingKind::Copy => Some(transput.product.runs.into()),
@@ -73,7 +73,7 @@ impl Line {
         let mut max_runs_f64 = (max_duration.as_secs_f64()
             / run_once_duration.as_secs_f64())
         .floor();
-        let mut max_runs_qnt: i64 = max_runs_f64 as Quantity;
+        let mut max_runs_qnt: i64 = max_runs_f64 as i64;
         if let Some(num_runs) = num_runs {
             if max_runs_qnt > num_runs {
                 max_runs_qnt = num_runs;
@@ -100,7 +100,7 @@ impl Line {
             } else {
                 *quantity =
                     (*quantity as f64 * max_runs_f64 * material_efficiency)
-                        .ceil() as Quantity;
+                        .ceil() as i64;
             }
         }
         for (_, quantity) in &mut line.installation_minerals {
@@ -130,8 +130,8 @@ impl Line {
         db_product: Item,
         line_product: Item,
         mut probability: f64,
-        max_runs: Quantity,
-        decryptor: Option<TypeId>,
+        max_runs: i64,
+        decryptor: Option<u32>,
     ) -> Result<(), crate::Error> {
         if let Some(decryptor) = decryptor {
             if db_product == line_product {
@@ -152,7 +152,7 @@ impl Line {
                 }
             }
         }
-        self.portion = (self.portion as f64 * probability).floor() as Quantity;
+        self.portion = (self.portion as f64 * probability).floor() as i64;
         Ok(())
     }
 

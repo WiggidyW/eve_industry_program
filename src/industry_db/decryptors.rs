@@ -3,7 +3,7 @@ use super::*;
 pub fn find_matching_decryptor(
     base: Item,
     product: Item,
-    decryptor_match: TypeId,
+    decryptor_match: u32,
 ) -> Option<(Item, f64)> {
     for decryptor in DECRYPTORS {
         if decryptor.0.type_id == decryptor_match

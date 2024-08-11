@@ -1,5 +1,4 @@
 use crate::config::{self, IndustrySlot, Item, ManufacturingKind, Transput};
-use crate::typedef::*;
 
 use std::collections::HashMap;
 use std::iter;
@@ -27,9 +26,9 @@ pub trait IndustryDatabase: Send + Sync {
     async fn compute_line(
         &self,
         // location config
-        system_id: SystemId,
-        structure_id: TypeId,
-        rigs: [Option<TypeId>; 3],
+        system_id: u32,
+        structure_id: u32,
+        rigs: [Option<u32>; 3],
         tax: config::ManufacturingValue,
         // config
         skills: &HashMap<u32, u8>,
@@ -37,12 +36,13 @@ pub trait IndustryDatabase: Send + Sync {
         kind: config::ManufacturingKind,
         transput: config::Transput,
         max_duration: Duration,
-        decryptor: Option<TypeId>,
+        decryptor: Option<u32>,
     ) -> Result<Line, crate::Error>;
     async fn get_volume(
         &self,
         item: Item,
     ) -> Result<Option<Volume>, crate::Error>;
+    async fn get_name(&self, item: Item) -> Result<String, crate::Error>;
 }
 
 pub async fn new_industry_database(

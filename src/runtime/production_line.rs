@@ -11,8 +11,7 @@ pub struct ProductionLine<'cfg, 'db, 'api> {
     pub import_src_intermediate_production_lines:
         RefCell<HashMap<u32, Rc<ProductionLine<'cfg, 'db, 'api>>>>,
     pub db_line: DbLineTransformed<'db>,
-    pub installation_cost: f64,
-    pub per_product_mult: f64,
+    pub installation_cost: f64, // installation cost for N runs
     pub builds: RefCell<i64>,
 }
 
@@ -41,7 +40,6 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
                 .kind_value(inner.kind);
             eiv * index_cost * db_line.cost_multiplier()
         };
-        let per_product_mult = db_line.runs() as f64 / db_line.portion() as f64;
         Self {
             inner,
             installation_cost,
@@ -51,9 +49,32 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
                 HashMap::new(),
             ),
             db_line,
-            per_product_mult,
             builds: RefCell::new(0),
         }
+    }
+
+    pub fn runs(&self) -> i64 {
+        self.db_line.runs()
+    }
+
+    pub fn portion(&self) -> i64 {
+        self.db_line.portion()
+    }
+
+    pub fn runs_per(&self) -> f64 {
+        self.runs() as f64 / self.portion() as f64
+    }
+
+    pub fn runs_for(&self, num_produced: f64) -> f64 {
+        self.runs_per() * num_produced
+    }
+
+    pub fn decryptor(&self) -> Option<Item> {
+        self.inner.decryptor.map(|type_id| Item::new(type_id))
+    }
+
+    pub fn installation_cost_for(&self, num_produced: f64) -> f64 {
+        self.installation_cost * (num_produced / self.portion() as f64)
     }
 
     pub fn import_src_intermediate_production_line(
@@ -93,7 +114,7 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
         num_produced: Option<f64>,
     ) -> impl Iterator<Item = (config::Item, f64)> + '_ {
         let mult = match num_produced {
-            Some(num_produced) => num_produced * self.per_product_mult,
+            Some(num_produced) => num_produced / self.portion() as f64,
             None => 1.0,
         };
         self.db_line
@@ -194,10 +215,6 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
 
     pub fn export_kind(&self) -> config::ProductionLineExportKind {
         self.inner.export_kind
-    }
-
-    pub fn portion(&self) -> i64 {
-        self.db_line.portion()
     }
 
     pub fn max_slots(&self) -> config::IndustrySlots {
@@ -341,14 +358,15 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
         num_produced: Option<f64>,
         type_volumes: &HashMap<Item, f64>,
         market_cost_with_delivery: f64,
-    ) -> f64 {
+    ) -> Profit {
+        let export_market = self.export_market();
         let num_produced =
             num_produced.unwrap_or(self.db_line.portion() as f64);
         let volume = type_volumes.get(&self.product()).copied().unwrap_or(0.0);
         let delivery_rate = self.export_pipe().delivery_rate();
         let min_sell = match self.export_kind() {
             config::ProductionLineExportKind::Product => Some(
-                self.export_market()
+                export_market
                     .orders
                     .min_sell(&self.product().type_id)
                     .unwrap(),
@@ -357,13 +375,18 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
         };
         let delivery_m3_fee = delivery_rate.m3_rate * volume * num_produced;
         let delivery_collateral_fee = delivery_rate.collateral_rate
-            * num_produced
             * match min_sell {
-                Some(min_sell) => min_sell,
-                None => market_cost_with_delivery + self.installation_cost,
+                Some(min_sell) => min_sell * num_produced,
+                None => {
+                    market_cost_with_delivery
+                        + self.installation_cost_for(num_produced)
+                }
             };
         let delivery_fee = delivery_m3_fee + delivery_collateral_fee;
-        min_sell.unwrap_or(0.0) - delivery_fee
+        let revenue = min_sell.unwrap_or(0.0) * num_produced;
+        let sales_tax = export_market.sales_tax() * revenue;
+        let brokers_fee = export_market.brokers_fee() * revenue;
+        Profit::new(delivery_fee + sales_tax + brokers_fee, revenue)
     }
 
     pub fn profit(
@@ -371,8 +394,9 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
         context: Option<u64>,
         num_produced: Option<f64>,
         type_volumes: &HashMap<Item, f64>,
-    ) -> Option<f64> {
+    ) -> Option<Profit> {
         let context = context.unwrap_or(self.profit_context());
+
         let market_cost_with_delivery = self.market_cost_with_delivery(
             context,
             num_produced,
@@ -383,7 +407,14 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
             type_volumes,
             market_cost_with_delivery,
         );
-        let mut profit = revenue_with_delivery - market_cost_with_delivery;
+
+        let mut profit = revenue_with_delivery;
+        profit.cost += market_cost_with_delivery;
+        profit.cost += match num_produced {
+            Some(num_produced) => self.installation_cost_for(num_produced),
+            None => self.installation_cost,
+        };
+
         for (item, quantity) in self.minerals(num_produced) {
             if let Some(pl) =
                 self.import_src_intermediate_production_line(&item.type_id)
@@ -392,6 +423,7 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
                     pl.profit(Some(context), Some(quantity), type_volumes)?;
             }
         }
+
         Some(profit)
     }
 

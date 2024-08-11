@@ -94,6 +94,8 @@ fn assets_target<'cfg, 'db, 'api>(
 pub fn build_in_locations<'cfg, 'db, 'api>(
     locations: &[Rc<Location<'cfg, 'db, 'api>>],
     slots: &mut IndustrySlots,
+    min_profit: f64,
+    min_margin: f64,
     type_volumes: &HashMap<Item, f64>,
 ) {
     loop {
@@ -102,14 +104,19 @@ pub fn build_in_locations<'cfg, 'db, 'api>(
             for production_line in
                 location.production_lines().iter_export_product()
             {
-                if production_line.can_build(slots) {
+                if production_line.can_build(&slots) {
                     if let Some(profit) =
                         production_line.profit(None, None, type_volumes)
                     {
-                        if profit
-                            > best.as_ref().map(|(_, p)| *p).unwrap_or(0.0)
+                        if profit.profit() > min_profit
+                            && profit.profit()
+                                > best.as_ref().map(|(_, p)| *p).unwrap_or(0.0)
+                            && profit.margin() > min_margin
                         {
-                            best = Some((production_line.clone(), profit));
+                            best = Some((
+                                production_line.clone(),
+                                profit.profit(),
+                            ));
                         }
                     }
                 }
@@ -186,12 +193,12 @@ pub fn new_locations<'cfg, 'db, 'api>(
                 panic!("pipe not connected to location");
             }
         }
-        // for (cfg_pipe_id, cfg_pipe) in cfg_location.pipes.iter() {
-        //     let pipe = &pipes[cfg_pipe_id];
-        //     for route in pipe.routes.iter() {
-        //         route.pipes.borrow_mut().push(pipe.clone());
-        //     }
-        // }
+        for (cfg_pipe_id, _) in cfg_location.pipes.iter() {
+            let pipe = &pipes[cfg_pipe_id];
+            for route in pipe.routes.iter() {
+                route.pipes.borrow_mut().push(pipe.clone());
+            }
+        }
     }
 
     let mut production_lines =
@@ -303,6 +310,10 @@ impl<'cfg, 'db, 'api> Location<'cfg, 'db, 'api> {
         }
     }
 
+    pub fn name(&self) -> &'cfg str {
+        self.inner.name.as_str()
+    }
+
     pub fn id(&self) -> u64 {
         self.inner.id
     }
@@ -398,6 +409,57 @@ impl<'cfg, 'db, 'api> Location<'cfg, 'db, 'api> {
 
         available
     }
+
+    pub fn routes(&self) -> LocationRoutes<'_, 'cfg, 'db, 'api> {
+        LocationRoutes {
+            inner: self.routes.borrow(),
+        }
+    }
+
+    pub fn assets_target(&self) -> LocationAssetTargets<'_> {
+        LocationAssetTargets {
+            inner: self.assets_target.borrow(),
+        }
+    }
+
+    pub fn asset_quantity(&self, item: Item) -> i64 {
+        self.assets
+            .map(|a| a.get(&item).copied())
+            .flatten()
+            .unwrap_or(0)
+    }
+}
+
+pub struct LocationRoutes<'l, 'cfg, 'db, 'api> {
+    inner: Ref<'l, Vec<Rc<DeliveryRoute<'cfg, 'db, 'api>>>>,
+}
+
+impl<'l, 'cfg, 'db, 'api> LocationRoutes<'l, 'cfg, 'db, 'api> {
+    pub fn iter(
+        &self,
+    ) -> impl Iterator<Item = &Rc<DeliveryRoute<'cfg, 'db, 'api>>> {
+        self.inner.iter()
+    }
+
+    // all routes where dst != location
+    pub fn iter_transit<'ll>(
+        &self,
+        location_id: u64,
+    ) -> impl Iterator<Item = &Rc<DeliveryRoute<'cfg, 'db, 'api>>> + '_ {
+        self.inner
+            .iter()
+            .filter(move |route| route.dst.id() != location_id)
+    }
+}
+
+pub struct LocationAssetTargets<'l> {
+    inner: Ref<'l, HashMap<Item, i64>>,
+}
+
+impl<'l> LocationAssetTargets<'l> {
+    pub fn iter(&self) -> impl Iterator<Item = (Item, i64)> + '_ {
+        self.inner.iter().map(|(&item, &quantity)| (item, quantity))
+    }
 }
 
 pub struct LocationProduction<'cfg, 'db, 'api> {
@@ -471,5 +533,13 @@ impl<'cfg, 'api> LocationMarket<'cfg, 'api> {
             inner,
             orders: LocationMarketOrders::new(orders),
         }
+    }
+
+    pub fn sales_tax(&self) -> f64 {
+        self.inner.sales_tax
+    }
+
+    pub fn brokers_fee(&self) -> f64 {
+        self.inner.brokers_fee
     }
 }

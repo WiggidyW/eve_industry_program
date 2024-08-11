@@ -1,3 +1,5 @@
+use serde::Deserialize;
+
 #[derive(Debug, Clone, Copy)]
 pub enum IndustrySlot {
     Manufacturing,
@@ -22,7 +24,7 @@ impl IndustrySlot {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct IndustrySlots {
     pub manufacturing: usize,
     pub reaction: usize,

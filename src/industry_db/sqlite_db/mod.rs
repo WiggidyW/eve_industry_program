@@ -17,10 +17,10 @@ impl InnerDatabase for SqliteDb {
     type Error = sqlx::Error;
     async fn get(
         &self,
-        product_id: TypeId,
+        product_id: u32,
         blueprint: Item,
         kind: ManufacturingKind,
-        system_id: SystemId,
+        system_id: u32,
         include: DatabaseParamsInclude,
     ) -> Result<DatabaseResponse, Self::Error> {
         let mut conn = self.inner.acquire().await?;
@@ -74,7 +74,7 @@ impl InnerDatabase for SqliteDb {
     }
     async fn get_volume(
         &self,
-        item: TypeId,
+        item: u32,
     ) -> Result<Option<Volume>, Self::Error> {
         let mut conn = self.inner.acquire().await?;
         match select_volume(&mut conn, item).await {
@@ -82,6 +82,10 @@ impl InnerDatabase for SqliteDb {
             Err(sqlx::Error::RowNotFound) => Ok(None),
             Err(e) => Err(e),
         }
+    }
+    async fn get_name(&self, item: u32) -> Result<String, Self::Error> {
+        let mut conn = self.inner.acquire().await?;
+        select_type_name(&mut conn, item).await
     }
 }
 
@@ -105,7 +109,7 @@ struct SqliteIdentifiers {
 
 struct Blueprint {
     product: Item,
-    portion: Quantity,
+    portion: i64,
     probability: f64,
     duration: Duration,
 }
@@ -121,7 +125,7 @@ struct DbBlueprint {
 
 async fn select_blueprint(
     conn: &mut SqlitePoolConnection,
-    product_id: TypeId,
+    product_id: u32,
     blueprint: Item,
     kind: ManufacturingKind,
 ) -> sqlx::Result<(Blueprint, SqliteIdentifiers)> {
@@ -177,14 +181,14 @@ struct DbMineral {
 async fn select_minerals(
     conn: &mut SqlitePoolConnection,
     id: SqliteID,
-) -> sqlx::Result<Vec<(Item, Quantity)>> {
+) -> sqlx::Result<Vec<(Item, i64)>> {
     sqlx::query_file_as!(
         DbMineral,
         "sqlite_build_data/select_minerals.sql",
         id,
     )
         .fetch(&mut **conn)
-        .map_ok(|m| (Item::new(m.type_id as TypeId), m.quantity))
+        .map_ok(|m| (Item::new(m.type_id as u32), m.quantity))
         .try_collect()
         .await
 }
@@ -204,7 +208,7 @@ async fn select_rigs_skills_structures(
     conn: &mut SqlitePoolConnection,
     kind: ManufacturingKind,
     id: SqliteID,
-) -> sqlx::Result<HashMap<TypeId, Efficiency>> {
+) -> sqlx::Result<HashMap<u32, Efficiency>> {
     let kind = into_database_kind(kind);
     sqlx::query_file_as!(
         DbEfficiency,
@@ -215,7 +219,7 @@ async fn select_rigs_skills_structures(
     .fetch(&mut **conn)
     .map_ok(|e| {
         (
-            e.type_id as TypeId,
+            e.type_id as u32,
             Efficiency::new(
                 e.time_efficiency,
                 e.material_efficiency,
@@ -237,7 +241,7 @@ struct DbSecurity {
 
 async fn select_security(
     conn: &mut SqlitePoolConnection,
-    system_id: SystemId,
+    system_id: u32,
 ) -> sqlx::Result<f64> {
     sqlx::query_file_as!(
         DbSecurity,
@@ -255,7 +259,7 @@ struct DbVolume {
 
 async fn select_volume(
     conn: &mut SqlitePoolConnection,
-    type_id: TypeId,
+    type_id: u32,
 ) -> sqlx::Result<Volume> {
     sqlx::query_file_as!(
         DbVolume,
@@ -265,4 +269,22 @@ async fn select_volume(
     .fetch_one(&mut **conn)
     .await
     .map(|v| v.volume)
+}
+
+struct DbTypeName {
+    name: String,
+}
+
+async fn select_type_name(
+    conn: &mut SqlitePoolConnection,
+    type_id: u32,
+) -> sqlx::Result<String> {
+    sqlx::query_file_as!(
+        DbTypeName,
+        "sqlite_build_data/select_type_name.sql",
+        type_id,
+    )
+    .fetch_one(&mut **conn)
+    .await
+    .map(|n| n.name)
 }

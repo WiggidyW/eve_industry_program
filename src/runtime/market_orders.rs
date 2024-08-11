@@ -83,6 +83,40 @@ impl<'api> TypeMarketOrders<'api> {
         (*self.reserved.borrow() + self.reserved_current(context)) as i64
     }
 
+    pub fn num_purchased_with_stats(
+        &self,
+        context: Option<u64>,
+    ) -> (i64, PurchaseStats) {
+        let reserved = self.reserved(context);
+
+        if reserved == 0.0 {
+            return (
+                0,
+                PurchaseStats {
+                    price_low: 0.0,
+                    price_high: 0.0,
+                },
+            );
+        }
+
+        let num_purchased = reserved as i64;
+        let mut stats = PurchaseStats {
+            price_low: self.inner.orders[0].price,
+            price_high: self.inner.orders[0].price,
+        };
+
+        let mut current = 0.0;
+        for order in &self.inner.orders {
+            stats.price_high = order.price;
+            current += order.volume;
+            if current >= reserved {
+                break;
+            }
+        }
+
+        (num_purchased, stats)
+    }
+
     pub fn min_sell(&self) -> Option<f64> {
         self.inner.orders.first().map(|order| order.price)
     }
@@ -92,11 +126,30 @@ impl<'api> TypeMarketOrders<'api> {
     }
 }
 
+pub struct PurchaseStats {
+    pub price_low: f64,
+    pub price_high: f64,
+}
+
 pub struct LocationMarketOrders<'api> {
     pub inner: HashMap<u32, TypeMarketOrders<'api>>,
 }
 
 impl<'api> LocationMarketOrders<'api> {
+    pub fn iter_purchases(
+        &self,
+        context: Option<u64>,
+    ) -> impl Iterator<Item = (u32, i64, PurchaseStats)> + '_ {
+        self.inner
+            .iter()
+            .map(move |(&type_id, orders)| {
+                (type_id, orders.num_purchased_with_stats(context))
+            })
+            .filter(|(_, (num_purchased, _))| *num_purchased > 0)
+            .map(|(type_id, (num_purchased, stats))| {
+                (type_id, num_purchased, stats)
+            })
+    }
     pub fn new(
         inner: Option<&'api HashMap<u32, api_data::TypeMarketOrders>>,
     ) -> Self {

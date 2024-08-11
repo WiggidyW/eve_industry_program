@@ -24,10 +24,18 @@ use market_orders::*;
 mod db_line_transformed;
 use db_line_transformed::*;
 
+mod profit;
+use profit::*;
+
+mod output;
+use output::*;
+
 pub struct RuntimeData<'cfg, 'db, 'api> {
     pub locations: Vec<Rc<Location<'cfg, 'db, 'api>>>,
     pub type_volumes: &'db HashMap<Item, f64>,
     pub slots: IndustrySlots,
+    pub min_profit: f64,
+    pub min_margin: f64,
 }
 
 impl<'cfg, 'db, 'api> RuntimeData<'cfg, 'db, 'api> {
@@ -36,6 +44,8 @@ impl<'cfg, 'db, 'api> RuntimeData<'cfg, 'db, 'api> {
         cfg_slots: &'cfg IndustrySlots,
         max_time: Duration,
         daily_flex_time: Duration,
+        min_profit: f64,
+        min_margin: f64,
         db_lines: &'db HashMap<u32, industry_db::Line>,
         type_volumes: &'db HashMap<Item, f64>,
         adjusted_prices: &'api HashMap<u32, f64>,
@@ -59,10 +69,26 @@ impl<'cfg, 'db, 'api> RuntimeData<'cfg, 'db, 'api> {
             ),
             type_volumes,
             slots: cfg_slots.clone(),
+            min_profit,
+            min_margin,
         }
     }
 
     pub fn build(&mut self) {
-        build_in_locations(&self.locations, &mut self.slots, self.type_volumes);
+        build_in_locations(
+            &self.locations,
+            &mut self.slots,
+            self.min_profit,
+            self.min_margin,
+            self.type_volumes,
+        );
+    }
+
+    pub fn write(
+        &self,
+        type_names: &'db HashMap<Item, String>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let output = OutputLocations::new(&self.locations, type_names);
+        output.write()
     }
 }

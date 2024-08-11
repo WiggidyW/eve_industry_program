@@ -1,15 +1,15 @@
-use super::*;
+use serde::Deserialize;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash, Deserialize)]
 pub struct Item {
-    pub type_id: TypeId,
+    pub type_id: u32,
     pub runs: i16,
     pub me: i8,
     pub te: i8,
 }
 
 impl Item {
-    pub fn new(type_id: TypeId) -> Item {
+    pub fn new(type_id: u32) -> Item {
         Item {
             type_id: type_id,
             runs: 0,
@@ -18,7 +18,7 @@ impl Item {
         }
     }
 
-    pub fn new_blueprint(type_id: TypeId, runs: i16, me: i8, te: i8) -> Item {
+    pub fn new_blueprint(type_id: u32, runs: i16, me: i8, te: i8) -> Item {
         Item {
             type_id: type_id,
             runs: runs,
@@ -57,8 +57,8 @@ impl Item {
     }
 }
 
-impl From<TypeId> for Item {
-    fn from(value: TypeId) -> Self {
+impl From<u32> for Item {
+    fn from(value: u32) -> Self {
         Item {
             type_id: value,
             runs: 0,

@@ -1,6 +1,11 @@
 use super::*;
 use crate::config::{self, Item};
-use std::{cell::RefCell, collections::HashMap, iter, rc::Rc};
+use std::{
+    cell::{Ref, RefCell},
+    collections::HashMap,
+    iter,
+    rc::Rc,
+};
 
 pub struct DeliveryPipe<'cfg, 'db, 'api> {
     pub routes: Vec<Rc<DeliveryRoute<'cfg, 'db, 'api>>>,
@@ -49,5 +54,21 @@ impl<'cfg, 'db, 'api> DeliveryPipe<'cfg, 'db, 'api> {
 
     pub fn deliver(&self, item: Item, volume: i64) {
         *self.deliveries.borrow_mut().entry(item).or_insert(0) += volume;
+    }
+
+    pub fn deliveries(&self) -> DeliveryPipeDeliveries {
+        DeliveryPipeDeliveries {
+            inner: self.deliveries.borrow(),
+        }
+    }
+}
+
+pub struct DeliveryPipeDeliveries<'dp> {
+    inner: Ref<'dp, HashMap<Item, i64>>,
+}
+
+impl<'dp> DeliveryPipeDeliveries<'dp> {
+    pub fn iter(&self) -> impl Iterator<Item = (Item, i64)> + '_ {
+        self.inner.iter().map(|(&item, &quantity)| (item, quantity))
     }
 }

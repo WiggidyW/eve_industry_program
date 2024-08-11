@@ -3,18 +3,18 @@ use super::*;
 pub struct DatabaseResponse {
     pub product: Item,
     pub probability: f64,
-    pub portion: Quantity, // per 1 run
+    pub portion: i64, // per 1 run
     pub duration: Duration,
-    pub minerals: Vec<(Item, Quantity)>,
-    pub installation_minerals: Vec<(Item, Quantity)>,
-    pub efficiencies: HashMap<TypeId, Efficiency>,
+    pub minerals: Vec<(Item, i64)>,
+    pub installation_minerals: Vec<(Item, i64)>,
+    pub efficiencies: HashMap<u32, Efficiency>,
     pub security: f64,
 }
 
 impl DatabaseResponse {
     pub fn add_efficiencies(
         &self,
-        type_id: &TypeId,
+        type_id: &u32,
         me: &mut f64,
         te: &mut f64,
         ce: &mut f64,
@@ -29,7 +29,7 @@ impl DatabaseResponse {
 
     pub fn add_probability(
         &self,
-        type_id: &TypeId,
+        type_id: &u32,
         probability: &mut f64,
         level: SkillLevel,
     ) {

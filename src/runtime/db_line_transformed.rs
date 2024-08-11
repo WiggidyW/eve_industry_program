@@ -1,5 +1,3 @@
-use crate::Quantity;
-
 use super::*;
 
 pub struct DbLineTransformed<'db> {
@@ -41,7 +39,7 @@ impl<'db> DbLineTransformed<'db> {
 
     pub fn installation_minerals(
         &self,
-    ) -> impl Iterator<Item = (Item, Quantity)> + '_ {
+    ) -> impl Iterator<Item = (Item, i64)> + '_ {
         self.inner
             .installation_minerals
             .iter()
@@ -50,7 +48,7 @@ impl<'db> DbLineTransformed<'db> {
             })
     }
 
-    pub fn minerals(&self) -> impl Iterator<Item = (Item, Quantity)> + '_ {
+    pub fn minerals(&self) -> impl Iterator<Item = (Item, i64)> + '_ {
         self.inner.minerals.iter().map(move |(item, quantity)| {
             (*item, *quantity * self.runs_multiplier)
         })

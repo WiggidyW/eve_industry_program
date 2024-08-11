@@ -11,16 +11,17 @@ pub trait InnerDatabase: Send + Sync {
     type Error: Into<Box<dyn std::error::Error>>;
     async fn get(
         &self,
-        product_id: TypeId,
+        product_id: u32,
         blueprint: Item, // runs are ignored
         kind: ManufacturingKind,
-        system_id: SystemId, // ignored if include_security is false
+        system_id: u32, // ignored if include_security is false
         include: DatabaseParamsInclude,
     ) -> Result<DatabaseResponse, Self::Error>;
     async fn get_volume(
         &self,
-        item: TypeId,
+        item: u32,
     ) -> Result<Option<Volume>, Self::Error>;
+    async fn get_name(&self, item: u32) -> Result<String, Self::Error>;
 }
 
 impl<T> IndustryDatabase for T
@@ -30,9 +31,9 @@ where
     async fn compute_line(
         &self,
         // location config
-        system_id: SystemId,
-        structure_id: TypeId,
-        rigs: [Option<TypeId>; 3],
+        system_id: u32,
+        structure_id: u32,
+        rigs: [Option<u32>; 3],
         tax: config::ManufacturingValue,
         // config
         skills: &HashMap<u32, u8>,
@@ -40,7 +41,7 @@ where
         kind: config::ManufacturingKind,
         transput: config::Transput,
         max_duration: Duration,
-        decryptor: Option<TypeId>,
+        decryptor: Option<u32>,
     ) -> Result<Line, crate::Error> {
         let rep = self
             .get(
@@ -71,5 +72,18 @@ where
         self.get_volume(item.type_id)
             .await
             .map_err(|e| crate::Error::IndustryDbError(e.into()))
+    }
+    async fn get_name(&self, item: Item) -> Result<String, crate::Error> {
+        let name = self
+            .get_name(item.type_id)
+            .await
+            .map_err(|e| crate::Error::IndustryDbError(e.into()))?;
+        Ok(match item.is_blueprint() {
+            true => format!(
+                "{} (me: {}, te: {}, runs: {})",
+                name, item.me, item.te, item.runs
+            ),
+            false => name,
+        })
     }
 }
