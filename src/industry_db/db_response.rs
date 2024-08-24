@@ -27,14 +27,14 @@ impl DatabaseResponse {
         }
     }
 
-    pub fn add_probability(
-        &self,
-        type_id: &u32,
-        probability: &mut f64,
-        level: SkillLevel,
-    ) {
-        if let Some(eff) = self.efficiencies.get(type_id) {
-            eff.add_probability(probability, level);
-        }
-    }
+    // pub fn add_probability(
+    //     &self,
+    //     type_id: &u32,
+    //     probability: &mut f64,
+    //     level: SkillLevel,
+    // ) {
+    //     if let Some(eff) = self.efficiencies.get(type_id) {
+    //         eff.add_probability(probability, level);
+    //     }
+    // }
 }

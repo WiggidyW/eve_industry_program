@@ -120,9 +120,9 @@ impl Efficiency {
         }
     }
 
-    pub fn add_probability(&self, probability: &mut f64, level: SkillLevel) {
-        self.add_probability_inner(probability, level.into());
-    }
+    // pub fn add_probability(&self, probability: &mut f64, level: SkillLevel) {
+    //     self.add_probability_inner(probability, level.into());
+    // }
 
     pub fn add_efficiencies(
         &self,
