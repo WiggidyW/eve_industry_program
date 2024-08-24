@@ -224,10 +224,10 @@ async fn select_rigs_skills_structures(
                 e.time_efficiency,
                 e.material_efficiency,
                 e.cost_efficiency,
-                e.zero_sec_multiplier,
+                e.probability_multiplier,
                 e.low_sec_multiplier,
                 e.high_sec_multiplier,
-                e.probability_multiplier,
+                e.zero_sec_multiplier,
             ),
         )
     })
