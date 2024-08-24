@@ -88,7 +88,8 @@ impl<'cfg, 'db> OutputLocation<'cfg, 'db> {
                 decryptor: production_line
                     .decryptor()
                     .map(|item| type_names[&item].as_str()),
-                runs: production_line.runs(),
+                runs: production_line.runs_per_sequence(),
+                sequences: production_line.num_sequences(),
                 builds: num_builds,
             });
         }
@@ -171,6 +172,7 @@ pub struct OutputBuild<'db> {
     pub blueprint: &'db str,
     pub decryptor: Option<&'db str>,
     pub runs: i64,
+    pub sequences: i64,
     pub builds: i64,
 }
 

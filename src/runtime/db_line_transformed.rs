@@ -3,7 +3,7 @@ use super::*;
 pub struct DbLineTransformed<'db> {
     inner: &'db industry_db::Line,
     extra_duration: Duration,
-    runs_multiplier: i64,
+    num_sequences: i64,
 }
 
 impl<'db> DbLineTransformed<'db> {
@@ -12,8 +12,7 @@ impl<'db> DbLineTransformed<'db> {
         max_time: Duration,
         daily_flex_time: Duration,
     ) -> Self {
-        let (extra_duration, runs_multiplier) = if (inner.duration * 2)
-            > max_time
+        let (extra_duration, num_sequences) = if (inner.duration * 2) > max_time
         {
             (Duration::new(0, 0), 1)
         } else {
@@ -34,7 +33,7 @@ impl<'db> DbLineTransformed<'db> {
         Self {
             inner,
             extra_duration,
-            runs_multiplier,
+            num_sequences,
         }
     }
 
@@ -45,13 +44,13 @@ impl<'db> DbLineTransformed<'db> {
             .installation_minerals
             .iter()
             .map(move |(item, quantity)| {
-                (*item, *quantity * self.runs_multiplier)
+                (*item, *quantity * self.num_sequences)
             })
     }
 
     pub fn minerals(&self) -> impl Iterator<Item = (Item, i64)> + '_ {
         self.inner.minerals.iter().map(move |(item, quantity)| {
-            (*item, *quantity * self.runs_multiplier)
+            (*item, *quantity * self.num_sequences)
         })
     }
 
@@ -60,10 +59,18 @@ impl<'db> DbLineTransformed<'db> {
     }
 
     pub fn runs(&self) -> i64 {
-        self.inner.runs * self.runs_multiplier
+        self.inner.runs * self.num_sequences
     }
 
     pub fn portion(&self) -> i64 {
-        self.inner.portion * self.runs_multiplier
+        self.inner.portion * self.num_sequences
+    }
+
+    pub fn num_sequences(&self) -> i64 {
+        self.num_sequences
+    }
+
+    pub fn runs_per_sequence(&self) -> i64 {
+        self.inner.runs
     }
 }

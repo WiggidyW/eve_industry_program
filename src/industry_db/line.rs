@@ -62,6 +62,7 @@ impl Line {
                 security,
             );
         }
+
         add_blueprint_efficiencies(
             &mut material_efficiency,
             &mut time_efficiency,

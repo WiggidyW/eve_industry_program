@@ -57,6 +57,14 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
         self.db_line.runs()
     }
 
+    pub fn runs_per_sequence(&self) -> i64 {
+        self.db_line.runs_per_sequence()
+    }
+
+    pub fn num_sequences(&self) -> i64 {
+        self.db_line.num_sequences()
+    }
+
     pub fn portion(&self) -> i64 {
         self.db_line.portion()
     }
