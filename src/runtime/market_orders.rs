@@ -69,10 +69,10 @@ impl<'api> TypeMarketOrders<'api> {
         }
         for order in &self.inner.orders {
             current += order.volume;
-            if current >= reserved {
+            if current > reserved {
                 return Some(api_data::MarketOrder {
                     price: order.price,
-                    volume: order.volume - (current - reserved),
+                    volume: current - reserved,
                 });
             }
         }

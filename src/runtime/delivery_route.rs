@@ -35,6 +35,10 @@ impl<'cfg, 'db, 'api> DeliveryRoute<'cfg, 'db, 'api> {
             inner: self.pipes.borrow(),
         }
     }
+
+    pub fn service_name(&self) -> &'cfg str {
+        &self.inner.service_name
+    }
 }
 
 pub struct DeliveryRoutePipes<'dr, 'cfg, 'db, 'api> {

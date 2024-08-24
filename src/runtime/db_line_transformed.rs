@@ -18,7 +18,8 @@ impl<'db> DbLineTransformed<'db> {
             (Duration::new(0, 0), 1)
         } else {
             let flexed_time_per_sequence = inner.duration + daily_flex_time;
-            // enforce flexed_time_per_sequence to be a multiple of 24 hours
+            // final_time_per_sequence = the smallest multiple of 24 hours
+            // that is >= flexed_time_per_sequence
             let final_time_per_sequence = flexed_time_per_sequence
                 + Duration::from_secs(24 * 60 * 60)
                 - Duration::new(

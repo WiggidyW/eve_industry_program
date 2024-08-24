@@ -10,7 +10,9 @@ pub struct Location {
     pub system_id: u32,
     pub production: Option<LocationProduction>,
     pub market: Option<LocationMarket>,
+    #[serde(default)]
     pub routes: HashMap<u64, DeliveryRoute>,
+    #[serde(default)]
     pub pipes: HashMap<u32, Vec<u32>>,
 }
 
@@ -19,6 +21,7 @@ pub struct LocationProduction {
     pub tax: ManufacturingValue,
     pub rigs: [Option<u32>; 3],
     pub structure_type_id: u32,
+    #[serde(default)]
     pub production_lines: Vec<ProductionLine>,
 }
 

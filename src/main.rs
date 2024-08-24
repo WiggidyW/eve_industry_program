@@ -5,14 +5,22 @@ mod industry_db;
 mod runtime;
 
 mod error;
+use std::io::{self, Write};
+
 use error::Error;
 
 #[tokio::main]
 async fn main() {
-    let db = industry_db::new_industry_database().await.unwrap();
-    let cfg = config::Config::read().unwrap();
-    let api = api_data::Api::read().unwrap();
+    let mut stdout = io::stdout();
 
+    print!("Reading config... ");
+    stdout.flush().unwrap();
+    let cfg = config::Config::read().unwrap();
+    print!("Done\n");
+
+    print!("Reading database... ");
+    stdout.flush().unwrap();
+    let db = industry_db::new_industry_database().await.unwrap();
     let db_lines = composite::get_db_lines(
         cfg.locations.iter(),
         &cfg.skills,
@@ -28,7 +36,15 @@ async fn main() {
     )
     .await
     .unwrap();
+    print!("Done\n");
 
+    print!("Reading API data... ");
+    stdout.flush().unwrap();
+    let api = api_data::Api::read().unwrap();
+    print!("Done\n");
+
+    print!("Building runtime... ");
+    stdout.flush().unwrap();
     let mut runtime = runtime::RuntimeData::new(
         &cfg.locations,
         &cfg.slots,
@@ -43,7 +59,15 @@ async fn main() {
         &api.market_orders,
         &api.assets,
     );
+    print!("Done\n");
 
+    print!("Calculating... ");
+    stdout.flush().unwrap();
     runtime.build();
+    print!("Done\n");
+
+    print!("Writing output... ");
+    stdout.flush().unwrap();
     runtime.write(&type_names).unwrap();
+    print!("Done\n");
 }

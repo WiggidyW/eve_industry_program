@@ -5,13 +5,13 @@ pub fn find_matching_decryptor(
     product: Item,
     decryptor_match: u32,
 ) -> Option<(Item, f64)> {
-    for decryptor in DECRYPTORS {
-        if decryptor.0.type_id == decryptor_match
-            && base.runs + decryptor.0.runs == product.runs
-            && base.me + decryptor.0.me == product.me
-            && base.te + decryptor.0.te == product.te
+    for (decryptor, p_mult) in DECRYPTORS {
+        if decryptor.type_id == decryptor_match
+            && base.runs + decryptor.runs == product.runs
+            && base.me + decryptor.me == product.me
+            && base.te + decryptor.te == product.te
         {
-            return Some(decryptor);
+            return Some((decryptor.into_non_blueprint(), p_mult));
         }
     }
     None

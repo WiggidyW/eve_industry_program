@@ -6,6 +6,8 @@ use crate::config::Item;
 use crate::config::ProductionLineExportKind;
 use crate::industry_db;
 use std::cell::Ref;
+use std::io;
+use std::io::Write;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 fn deduplicate_locations<'iter, 'cfg, 'db, 'api>(
@@ -74,7 +76,7 @@ fn assets_target<'cfg, 'db, 'api>(
                     // add item to every unique location along the pipe, except for the markets themselves
                     None => {
                         if !item.is_marketable() {
-                            panic!("material not marketable");
+                            panic!("material '{:?}' not marketable", item);
                         }
                         for location in market_locations.iter() {
                             *assets_target
@@ -98,7 +100,13 @@ pub fn build_in_locations<'cfg, 'db, 'api>(
     min_margin: f64,
     type_volumes: &HashMap<Item, f64>,
 ) {
+    let mut stdout = io::stdout();
+    let mut i = 0;
+    print!("\n");
     loop {
+        i += 1;
+        print!("  Iteration {}... ", i);
+        stdout.flush().unwrap();
         let mut best = None;
         for location in locations.iter() {
             for production_line in
@@ -125,8 +133,14 @@ pub fn build_in_locations<'cfg, 'db, 'api>(
         match best {
             Some((production_line, _)) => {
                 production_line.build(slots, type_volumes);
+                print!(
+                    "Built '{}' at '{}'\n",
+                    production_line.product().type_id,
+                    production_line.location().name()
+                );
             }
             None => {
+                print!("Built nothing, breaking\n");
                 break;
             }
         }
@@ -242,6 +256,13 @@ pub fn new_locations<'cfg, 'db, 'api>(
                 .or_insert_with(Vec::new)
                 .push(production_line);
         }
+    }
+
+    for cfg_location in cfg_locations.iter() {
+        let cfg_location_production = match &cfg_location.production {
+            Some(p) => p,
+            None => continue,
+        };
         for cfg_production_line in
             cfg_location_production.production_lines.iter()
         {

@@ -9,7 +9,9 @@ pub struct ProductionLine {
     pub kind: ManufacturingKind,
     pub export_kind: ProductionLineExportKind,
     pub export_pipe_id: u32,
+    #[serde(default)]
     pub import_src_market_pipe_ids: Vec<u32>,
+    #[serde(default)]
     pub import_src_production_line_ids: HashMap<u32, u32>,
     pub decryptor: Option<u32>,
     pub parallel: i64,
@@ -30,10 +32,6 @@ pub enum ManufacturingKind {
 }
 
 impl ManufacturingKind {
-    pub fn from_activity_id(id: i32) -> Option<ManufacturingKind> {
-        unimplemented!()
-    }
-
     pub const fn is_science(&self) -> bool {
         match self {
             ManufacturingKind::Invention => true,

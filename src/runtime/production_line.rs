@@ -197,7 +197,7 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
         self.portion() * self.num_builds()
     }
 
-    fn export_market(&self) -> &LocationMarket<'cfg, 'api> {
+    fn unwrap_export_market(&self) -> &LocationMarket<'cfg, 'api> {
         self.export_pipe.dst().unwrap_market()
     }
 
@@ -359,18 +359,15 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
         type_volumes: &HashMap<Item, f64>,
         market_cost_with_delivery: f64,
     ) -> Profit {
-        let export_market = self.export_market();
         let num_produced =
             num_produced.unwrap_or(self.db_line.portion() as f64);
         let volume = type_volumes.get(&self.product()).copied().unwrap_or(0.0);
         let delivery_rate = self.export_pipe().delivery_rate();
         let min_sell = match self.export_kind() {
-            config::ProductionLineExportKind::Product => Some(
-                export_market
-                    .orders
-                    .min_sell(&self.product().type_id)
-                    .unwrap(),
-            ),
+            config::ProductionLineExportKind::Product => self
+                .unwrap_export_market()
+                .orders
+                .min_sell(&self.product().type_id),
             config::ProductionLineExportKind::Intermediate => None,
         };
         let delivery_m3_fee = delivery_rate.m3_rate * volume * num_produced;
@@ -383,10 +380,15 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
                 }
             };
         let delivery_fee = delivery_m3_fee + delivery_collateral_fee;
-        let revenue = min_sell.unwrap_or(0.0) * num_produced;
-        let sales_tax = export_market.sales_tax() * revenue;
-        let brokers_fee = export_market.brokers_fee() * revenue;
-        Profit::new(delivery_fee + sales_tax + brokers_fee, revenue)
+        let market_revenue = min_sell.unwrap_or(0.0) * num_produced;
+        let (sales_tax, brokers_fee) = match self.export_kind() {
+            config::ProductionLineExportKind::Product => (
+                self.unwrap_export_market().sales_tax() * market_revenue,
+                self.unwrap_export_market().brokers_fee() * market_revenue,
+            ),
+            config::ProductionLineExportKind::Intermediate => (0.0, 0.0),
+        };
+        Profit::new(delivery_fee + sales_tax + brokers_fee, market_revenue)
     }
 
     pub fn profit(
@@ -402,6 +404,7 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
             num_produced,
             type_volumes,
         )?;
+
         let revenue_with_delivery = self.revenue_with_delivery(
             num_produced,
             type_volumes,

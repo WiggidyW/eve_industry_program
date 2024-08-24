@@ -100,15 +100,15 @@ impl<'cfg, 'db> OutputLocation<'cfg, 'db> {
         type_names: &'db HashMap<Item, String>,
     ) -> Option<Vec<OutputDeliveries<'cfg, 'db>>> {
         let mut deliveries_map = HashMap::new();
-        for delivery_pipes in location
+        for (route, delivery_pipes) in location
             .routes()
             .iter_transit(location.id())
-            .map(|route| route.pipes())
+            .map(|route| (route, route.pipes()))
         {
             for delivery_pipe in delivery_pipes.iter() {
                 for (item, quantity) in delivery_pipe.deliveries().iter() {
                     *deliveries_map
-                        .entry(delivery_pipe.dst().name())
+                        .entry((route.dst.name(), route.service_name()))
                         .or_insert(HashMap::new())
                         .entry(item)
                         .or_insert(0) += quantity;
@@ -117,11 +117,12 @@ impl<'cfg, 'db> OutputLocation<'cfg, 'db> {
         }
 
         let mut deliveries = None;
-        for (destination, item_deliveries) in deliveries_map {
+        for ((destination, service_name), item_deliveries) in deliveries_map {
             deliveries
                 .get_or_insert_with(Vec::new)
                 .push(OutputDeliveries {
                     destination,
+                    service_name,
                     items: item_deliveries
                         .into_iter()
                         .map(|(item, quantity)| OutputDelivery {
@@ -176,6 +177,7 @@ pub struct OutputBuild<'db> {
 #[derive(Serialize)]
 pub struct OutputDeliveries<'cfg, 'db> {
     pub destination: &'cfg str,
+    pub service_name: &'cfg str,
     pub items: Vec<OutputDelivery<'db>>,
 }
 
