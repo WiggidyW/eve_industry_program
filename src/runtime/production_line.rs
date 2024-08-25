@@ -11,7 +11,7 @@ pub struct ProductionLine<'cfg, 'db, 'api> {
     pub import_src_intermediate_production_lines:
         RefCell<HashMap<u32, Rc<ProductionLine<'cfg, 'db, 'api>>>>,
     pub db_line: DbLineTransformed<'db>,
-    pub installation_cost: f64, // installation cost for N runs
+    installation_cost: f64, // installation cost for N runs
     pub builds: RefCell<i64>,
 }
 
@@ -51,6 +51,10 @@ impl<'cfg, 'db, 'api> ProductionLine<'cfg, 'db, 'api> {
             db_line,
             builds: RefCell::new(0),
         }
+    }
+
+    pub fn installation_cost(&self) -> f64 {
+        self.installation_cost
     }
 
     pub fn runs(&self) -> i64 {

@@ -68,6 +68,6 @@ async fn main() {
 
     print!("Writing output... ");
     stdout.flush().unwrap();
-    runtime.write(&type_names).unwrap();
+    runtime.write(&type_names, &type_volumes).unwrap();
     print!("Done\n");
 }

@@ -1,23 +1,33 @@
 use super::*;
-use crate::{config::Item, industry_db};
+use crate::config::Item;
 use serde::Serialize;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 
 #[derive(Serialize)]
-pub struct OutputLocations<'cfg, 'db>(Vec<OutputLocation<'cfg, 'db>>);
+pub struct OutputLocations<'cfg, 'db> {
+    // DOES NOT include delivery collateral rate costs
+    cost: f64,
+    locations: Vec<OutputLocation<'cfg, 'db>>,
+}
 
 impl<'cfg, 'db> OutputLocations<'cfg, 'db> {
     pub fn new(
         locations: &[Rc<Location<'cfg, '_, '_>>],
         type_names: &'db HashMap<Item, String>,
+        type_volumes: &'db HashMap<Item, f64>,
     ) -> Self {
-        Self(
-            locations
-                .iter()
-                .map(|location| OutputLocation::new(location, type_names))
-                .collect(),
-        )
+        let mut cost = 0.0;
+        let locations = locations
+            .iter()
+            .map(|location| {
+                OutputLocation::new(
+                    location,
+                    type_names,
+                    type_volumes,
+                    &mut cost,
+                )
+            })
+            .collect();
+        Self { cost, locations }
     }
 
     pub fn write(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -40,12 +50,19 @@ impl<'cfg, 'db> OutputLocation<'cfg, 'db> {
     pub fn new(
         location: &Location<'cfg, '_, '_>,
         type_names: &'db HashMap<Item, String>,
+        type_volumes: &'db HashMap<Item, f64>,
+        cost: &mut f64,
     ) -> Self {
         Self {
             location: location.name(),
-            purchases: Self::purchases(location, type_names),
-            builds: Self::builds(location, type_names),
-            deliveries: Self::deliveries(location, type_names),
+            purchases: Self::purchases(location, type_names, cost),
+            builds: Self::builds(location, type_names, cost),
+            deliveries: Self::deliveries(
+                location,
+                type_names,
+                type_volumes,
+                cost,
+            ),
             missing_assets: Self::missing_assets(location, type_names),
         }
     }
@@ -53,6 +70,7 @@ impl<'cfg, 'db> OutputLocation<'cfg, 'db> {
     fn purchases(
         location: &Location<'cfg, '_, '_>,
         type_names: &'db HashMap<Item, String>,
+        cost: &mut f64,
     ) -> Option<Vec<OutputPurchase<'db>>> {
         let location_market = match &location.market {
             Some(location_market) => location_market,
@@ -60,7 +78,7 @@ impl<'cfg, 'db> OutputLocation<'cfg, 'db> {
         };
         let mut purchases = Vec::new();
         for (type_id, quantity, stats) in
-            location_market.orders.iter_purchases(None)
+            location_market.orders.iter_purchases(None, cost)
         {
             purchases.push(OutputPurchase {
                 item: &type_names[&Item::new(type_id)],
@@ -75,6 +93,7 @@ impl<'cfg, 'db> OutputLocation<'cfg, 'db> {
     fn builds(
         location: &Location<'cfg, '_, '_>,
         type_names: &'db HashMap<Item, String>,
+        cost: &mut f64,
     ) -> Option<Vec<OutputBuild<'db>>> {
         let mut builds = None;
         for production_line in location.production_lines().iter_all() {
@@ -82,6 +101,7 @@ impl<'cfg, 'db> OutputLocation<'cfg, 'db> {
             if num_builds == 0 {
                 continue;
             }
+            *cost += num_builds as f64 * production_line.installation_cost();
             builds.get_or_insert_with(Vec::new).push(OutputBuild {
                 product: &type_names[&production_line.product()],
                 blueprint: &type_names[&production_line.blueprint()],
@@ -99,6 +119,8 @@ impl<'cfg, 'db> OutputLocation<'cfg, 'db> {
     fn deliveries(
         location: &Location<'cfg, '_, '_>,
         type_names: &'db HashMap<Item, String>,
+        type_volumes: &'db HashMap<Item, f64>,
+        cost: &mut f64,
     ) -> Option<Vec<OutputDeliveries<'cfg, 'db>>> {
         let mut deliveries_map = HashMap::new();
         for (route, delivery_pipes) in location
@@ -108,6 +130,10 @@ impl<'cfg, 'db> OutputLocation<'cfg, 'db> {
         {
             for delivery_pipe in delivery_pipes.iter() {
                 for (item, quantity) in delivery_pipe.deliveries().iter() {
+                    let item_volume = *type_volumes.get(&item).unwrap_or(&0.0);
+                    *cost += delivery_pipe.delivery_rate().m3_rate
+                        * item_volume
+                        * quantity as f64;
                     *deliveries_map
                         .entry((route.dst.name(), route.service_name()))
                         .or_insert(HashMap::new())

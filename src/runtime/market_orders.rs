@@ -86,6 +86,7 @@ impl<'api> TypeMarketOrders<'api> {
     pub fn num_purchased_with_stats(
         &self,
         context: Option<u64>,
+        cost: &mut f64,
     ) -> (i64, PurchaseStats) {
         let reserved = self.reserved(context);
 
@@ -110,7 +111,10 @@ impl<'api> TypeMarketOrders<'api> {
             stats.price_high = order.price;
             current += order.volume;
             if current >= reserved {
+                *cost += order.price * (order.volume - (current - reserved));
                 break;
+            } else {
+                *cost += order.price * order.volume;
             }
         }
 
@@ -136,17 +140,23 @@ pub struct LocationMarketOrders<'api> {
 }
 
 impl<'api> LocationMarketOrders<'api> {
-    pub fn iter_purchases(
-        &self,
+    pub fn iter_purchases<'this, 'c>(
+        &'this self,
         context: Option<u64>,
-    ) -> impl Iterator<Item = (u32, i64, PurchaseStats)> + '_ {
+        cost: &'c mut f64,
+    ) -> impl Iterator<Item = (u32, i64, PurchaseStats)> + 'this + 'c
+    where
+        'api: 'c,
+        'c: 'this,
+        'this: 'c,
+    {
         self.inner
             .iter()
             .map(move |(&type_id, orders)| {
-                (type_id, orders.num_purchased_with_stats(context))
+                (type_id, orders.num_purchased_with_stats(context, cost))
             })
             .filter(|(_, (num_purchased, _))| *num_purchased > 0)
-            .map(|(type_id, (num_purchased, stats))| {
+            .map(move |(type_id, (num_purchased, stats))| {
                 (type_id, num_purchased, stats)
             })
     }

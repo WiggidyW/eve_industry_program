@@ -87,8 +87,10 @@ impl<'cfg, 'db, 'api> RuntimeData<'cfg, 'db, 'api> {
     pub fn write(
         &self,
         type_names: &'db HashMap<Item, String>,
+        type_volumes: &'db HashMap<Item, f64>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let output = OutputLocations::new(&self.locations, type_names);
+        let output =
+            OutputLocations::new(&self.locations, type_names, type_volumes);
         output.write()
     }
 }
